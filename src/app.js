@@ -62,6 +62,7 @@ async function initList() {
   $('rlist').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>'
   try {
     recipes = await fetchRecipes()
+    console.log('fetchRecipes result:', recipes)
   } catch {
     toast('Error al cargar recetas', true)
   }
@@ -99,18 +100,15 @@ function renderList() {
 
   wrap.innerHTML = list.map(r => `
     <div class="recipe-card" data-id="${r.id}">
-      ${r.photo_url
-        ? `<div style="position:relative">
-             <img class="recipe-card-photo" src="${r.photo_url}" alt="${r.name}" loading="lazy">
-             ${r.time ? `<div class="time-chip">⏱ ${r.time}</div>` : ''}
-           </div>`
-        : `<div class="recipe-card-placeholder">
-             ${r.emoji || '🍽'}
-             ${r.time ? `<div class="time-chip">⏱ ${r.time}</div>` : ''}
-           </div>`}
+      <div class="recipe-card-placeholder" style="position:relative">
+        ${r.photo_url
+          ? `<img class="recipe-card-photo" src="${r.photo_url}" alt="${r.name || ''}" loading="lazy">`
+          : (r.emoji || '🍽')}
+        ${r.time ? `<div class="time-chip">⏱ ${r.time}</div>` : ''}
+      </div>
       <div class="recipe-card-body">
-        <div class="recipe-card-name">${r.name}</div>
-        ${r.description ? `<div class="recipe-card-desc">${r.description}</div>` : ''}
+        <div class="recipe-card-name">${r.name || ''}</div>
+        <div class="recipe-card-desc">${r.description || ''}</div>
         <div class="recipe-card-tags">
           ${(r.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}
           ${r.difficulty ? `<span class="tag">${r.difficulty}</span>` : ''}

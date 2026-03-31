@@ -3,9 +3,12 @@ import { supabase } from './supabase.js'
 export async function fetchRecipes() {
   const { data, error } = await supabase
     .from('recipes')
-    .select('*')
+    .select('id, name, cat, emoji, description, time, difficulty, servings, ingredients, steps, tags, photo_url')
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) {
+    console.error('fetchRecipes error:', error)
+    throw error
+  }
   return data || []
 }
 
