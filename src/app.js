@@ -253,9 +253,13 @@ function onPhotoChange(e) {
 window.addIng = function () {
   const nameEl = $('ing-input-name')
   const qtyEl  = $('ing-input-qty')
+  const unitEl = $('ing-input-unit')
   const name = nameEl.value.trim()
   if (!name) { nameEl.focus(); return }
-  formIngredients.push({ name, qty: qtyEl.value.trim() })
+  const num = qtyEl.value.trim()
+  const unit = unitEl.value
+  const qty = num ? (unit ? `${num} ${unit}` : num) : ''
+  formIngredients.push({ name, qty })
   nameEl.value = ''
   qtyEl.value = ''
   nameEl.focus()
@@ -280,6 +284,7 @@ window.onIngKey = function (e) {
     else window.addIng()
   }
 }
+
 
 window.onStepKey = function (e) {
   if (e.key === 'Enter') { e.preventDefault(); window.addStep() }

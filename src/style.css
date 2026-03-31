@@ -867,8 +867,21 @@ body {
   line-height: 1.55;
 }
 
-/* Fila de agregar ítem */
+/* Fila de agregar ítem (pasos) */
 .item-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Bloque de agregar ingrediente (2 filas) */
+.ing-add-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ing-add-bottom {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -886,10 +899,12 @@ body {
   font-family: inherit;
   outline: none;
   min-width: 0;
+  width: 100%;
 }
 
-.item-add-qty {
-  width: 72px;
+.item-add-qty-num {
+  width: 64px;
+  flex-shrink: 0;
   height: 36px;
   padding: 0 8px;
   border: 0.5px solid var(--border-2);
@@ -899,9 +914,27 @@ body {
   font-size: 13px;
   font-family: inherit;
   outline: none;
+  -webkit-appearance: none;
 }
 
-.item-add-qty:focus { border-color: var(--green); }
+.item-add-qty-num:focus { border-color: var(--green); }
+
+.item-add-unit {
+  flex: 1;
+  height: 36px;
+  padding: 0 8px;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  min-width: 0;
+}
+
+.item-add-unit:focus { border-color: var(--green); }
 
 .item-add-btn {
   width: 36px;

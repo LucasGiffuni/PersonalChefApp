@@ -205,16 +205,29 @@
       <div class="field">
         <label>Ingredientes</label>
         <div class="item-list" id="ing-list"></div>
-        <div class="item-add-row" id="ing-add-row">
-          <input id="ing-input-name" type="text" placeholder="Ingrediente..."
+        <div class="ing-add-wrap" id="ing-add-row">
+          <input id="ing-input-name" type="text" placeholder="Nombre del ingrediente"
                  class="item-add-name" onkeydown="onIngKey(event)">
-          <input id="ing-input-qty"  type="text" placeholder="Cant."
-                 class="item-add-qty"  onkeydown="onIngKey(event)">
-          <button class="item-add-btn" onclick="addIng()" type="button">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </button>
+          <div class="ing-add-bottom">
+            <input id="ing-input-qty" type="number" placeholder="0" min="0" step="any"
+                   class="item-add-qty-num" onkeydown="onIngKey(event)">
+            <select id="ing-input-unit" class="item-add-unit">
+              <option value="g">g — gramos</option>
+              <option value="kg">kg — kilogramos</option>
+              <option value="cda">cda — cucharadas</option>
+              <option value="cdta">cdta — cucharaditas</option>
+              <option value="L">L — litros</option>
+              <option value="mL">mL — mililitros</option>
+              <option value="taza">taza</option>
+              <option value="u">u — unidades</option>
+              <option value="">sin unidad</option>
+            </select>
+            <button class="item-add-btn" onclick="addIng()" type="button">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="field-hint">Presioná + o Enter para agregar</div>
       </div>
