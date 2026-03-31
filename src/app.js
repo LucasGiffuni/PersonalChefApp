@@ -11,6 +11,7 @@ let photoFile = null
 let photoPreviewUrl = null
 let formIngredients = []
 let formSteps = []
+let selectedUnit = 'g'
 let appInitialized = false
 
 const CATS = ['Todas', 'Entrada', 'Principal', 'Postre', 'Sopa', 'Otro']
@@ -51,6 +52,14 @@ function bindEvents() {
   $('form-cancel').addEventListener('click', () => showView('v-list'))
   $('form-save-btn').addEventListener('click', handleSave)
   $('photo-input').addEventListener('change', onPhotoChange)
+
+  document.querySelectorAll('.unit-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.unit-pill').forEach(p => p.classList.remove('active'))
+      pill.classList.add('active')
+      selectedUnit = pill.dataset.unit
+    })
+  })
 }
 
 window.handleLogout = async function () {
@@ -212,6 +221,12 @@ function openForm(recipe = null) {
   formIngredients = (recipe?.ingredients || []).map(i => ({ name: i.name || i, qty: i.qty || '' }))
   formSteps = [...(recipe?.steps || [])]
 
+  // Resetear unidad seleccionada
+  selectedUnit = 'g'
+  document.querySelectorAll('.unit-pill').forEach(p =>
+    p.classList.toggle('active', p.dataset.unit === 'g')
+  )
+
   renderPhotoArea()
   showView('v-form')
   renderIngList()
@@ -221,24 +236,21 @@ function openForm(recipe = null) {
 
 function renderPhotoArea() {
   const wrap = $('photo-wrap')
+  wrap.innerHTML = ''
+  const hero = document.createElement('div')
+  hero.className = 'photo-hero'
   if (photoPreviewUrl) {
-    wrap.innerHTML = `<img class="photo-preview" src="${photoPreviewUrl}" alt="preview">`
-    const btn = document.createElement('button')
-    btn.className = 'photo-change-btn'
-    btn.type = 'button'
-    btn.textContent = '📷 Cambiar foto'
-    btn.addEventListener('click', () => $('photo-input').click())
-    wrap.appendChild(btn)
+    hero.innerHTML = `
+      <img src="${photoPreviewUrl}" alt="preview">
+      <div class="photo-hero-overlay">📷 Cambiar foto</div>`
   } else {
-    const zone = document.createElement('div')
-    zone.className = 'photo-zone'
-    zone.innerHTML = `
-      <div class="photo-zone-icon">📷</div>
-      <div class="photo-zone-label">Agregar foto del plato</div>`
-    zone.addEventListener('click', () => $('photo-input').click())
-    wrap.innerHTML = ''
-    wrap.appendChild(zone)
+    hero.innerHTML = `
+      <div class="photo-hero-icon">📷</div>
+      <div class="photo-hero-label">Agregar foto del plato</div>
+      <div class="photo-hero-hint">Toca para seleccionar</div>`
   }
+  hero.addEventListener('click', () => $('photo-input').click())
+  wrap.appendChild(hero)
 }
 
 function onPhotoChange(e) {
@@ -253,12 +265,10 @@ function onPhotoChange(e) {
 window.addIng = function () {
   const nameEl = $('ing-input-name')
   const qtyEl  = $('ing-input-qty')
-  const unitEl = $('ing-input-unit')
   const name = nameEl.value.trim()
   if (!name) { nameEl.focus(); return }
   const num = qtyEl.value.trim()
-  const unit = unitEl.value
-  const qty = num ? (unit ? `${num} ${unit}` : num) : ''
+  const qty = num ? (selectedUnit ? `${num} ${selectedUnit}` : num) : ''
   formIngredients.push({ name, qty })
   nameEl.value = ''
   qtyEl.value = ''

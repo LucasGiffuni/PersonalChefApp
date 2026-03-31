@@ -140,124 +140,120 @@
 
     <div class="form-scroll">
 
-      <!-- Foto -->
-      <div class="field">
-        <label>Foto del plato</label>
-        <div id="photo-wrap"></div>
-        <input type="file" id="photo-input" accept="image/*" style="display:none">
-      </div>
+      <!-- ── FOTO hero ── -->
+      <div id="photo-wrap"></div>
+      <input type="file" id="photo-input" accept="image/*" style="display:none">
 
-      <!-- Nombre -->
-      <div class="field">
-        <label>Nombre del plato</label>
-        <input id="f-name" type="text" placeholder="Ej: Risotto de hongos">
-      </div>
-
-      <!-- Emoji -->
-      <div class="field">
-        <label>Emoji (si no hay foto)</label>
-        <input id="f-emoji" type="text" placeholder="🍝" maxlength="2">
-      </div>
-
-      <!-- Categoría + Tiempo en 2 columnas -->
-      <div class="field-row">
+      <!-- ── SECCIÓN: Básico ── -->
+      <div class="fsec">
+        <div class="fsec-title">Información básica</div>
         <div class="field">
-          <label>Categoría</label>
-          <select id="f-cat">
-            <option value="Entrada">Entrada</option>
-            <option value="Principal" selected>Principal</option>
-            <option value="Postre">Postre</option>
-            <option value="Sopa">Sopa</option>
-            <option value="Otro">Otro</option>
-          </select>
+          <label>Nombre del plato</label>
+          <input id="f-name" type="text" placeholder="Ej: Risotto de hongos">
         </div>
         <div class="field">
-          <label>Tiempo total</label>
-          <input id="f-time" type="text" placeholder="35 min">
+          <label>Descripción breve</label>
+          <textarea id="f-desc" placeholder="Una línea que resume el plato..."></textarea>
+        </div>
+        <div class="field">
+          <label>Emoji (si no hay foto)</label>
+          <input id="f-emoji" type="text" placeholder="🍝" maxlength="2">
         </div>
       </div>
 
-      <!-- Dificultad + Porciones en 2 columnas -->
-      <div class="field-row">
-        <div class="field">
-          <label>Dificultad</label>
-          <select id="f-diff">
-            <option>Fácil</option>
-            <option selected>Media</option>
-            <option>Alta</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Porciones base</label>
-          <input id="f-serv" type="number" min="1" max="20" value="4">
-        </div>
-      </div>
-
-      <!-- Descripción -->
-      <div class="field">
-        <label>Descripción breve</label>
-        <textarea id="f-desc" placeholder="Una línea que resume el plato..."></textarea>
-      </div>
-
-      <div class="form-divider"></div>
-
-      <!-- ── INGREDIENTES ítem a ítem ── -->
-      <div class="field">
-        <label>Ingredientes</label>
-        <div class="item-list" id="ing-list"></div>
-        <div class="ing-add-wrap" id="ing-add-row">
-          <input id="ing-input-name" type="text" placeholder="Nombre del ingrediente"
-                 class="item-add-name" onkeydown="onIngKey(event)">
-          <div class="ing-add-bottom">
-            <input id="ing-input-qty" type="number" placeholder="0" min="0" step="any"
-                   class="item-add-qty-num" onkeydown="onIngKey(event)">
-            <select id="ing-input-unit" class="item-add-unit">
-              <option value="g">g — gramos</option>
-              <option value="kg">kg — kilogramos</option>
-              <option value="cda">cda — cucharadas</option>
-              <option value="cdta">cdta — cucharaditas</option>
-              <option value="L">L — litros</option>
-              <option value="mL">mL — mililitros</option>
-              <option value="taza">taza</option>
-              <option value="u">u — unidades</option>
-              <option value="">sin unidad</option>
+      <!-- ── SECCIÓN: Detalles ── -->
+      <div class="fsec">
+        <div class="fsec-title">Detalles</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Categoría</label>
+            <select id="f-cat">
+              <option value="Entrada">Entrada</option>
+              <option value="Principal" selected>Principal</option>
+              <option value="Postre">Postre</option>
+              <option value="Sopa">Sopa</option>
+              <option value="Otro">Otro</option>
             </select>
-            <button class="item-add-btn" onclick="addIng()" type="button">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </div>
+          <div class="field">
+            <label>Tiempo total</label>
+            <input id="f-time" type="text" placeholder="35 min">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Dificultad</label>
+            <select id="f-diff">
+              <option>Fácil</option>
+              <option selected>Media</option>
+              <option>Alta</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Porciones base</label>
+            <input id="f-serv" type="number" min="1" max="20" value="4">
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECCIÓN: Ingredientes ── -->
+      <div class="fsec">
+        <div class="fsec-title">Ingredientes</div>
+        <div class="item-list" id="ing-list"></div>
+
+        <div class="ing-add-wrap">
+          <input id="ing-input-name" type="text" placeholder="Nombre del ingrediente"
+                 class="ing-name-input" onkeydown="onIngKey(event)">
+
+          <div class="ing-qty-row">
+            <input id="ing-input-qty" type="number" placeholder="Cant." min="0" step="any"
+                   class="ing-qty-input" onkeydown="onIngKey(event)">
+            <div class="unit-pills" id="unit-pills">
+              <button class="unit-pill active" data-unit="g"    type="button">g</button>
+              <button class="unit-pill"        data-unit="kg"   type="button">kg</button>
+              <button class="unit-pill"        data-unit="cda"  type="button">cda</button>
+              <button class="unit-pill"        data-unit="cdta" type="button">cdta</button>
+              <button class="unit-pill"        data-unit="L"    type="button">L</button>
+              <button class="unit-pill"        data-unit="mL"   type="button">mL</button>
+              <button class="unit-pill"        data-unit="taza" type="button">taza</button>
+              <button class="unit-pill"        data-unit="u"    type="button">u</button>
+              <button class="unit-pill"        data-unit=""     type="button">—</button>
+            </div>
+            <button class="ing-add-btn" onclick="addIng()" type="button">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M7.5 2v11M2 7.5h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
               </svg>
             </button>
           </div>
+          <div class="field-hint">Enter en el nombre pasa a cantidad · Enter en cantidad agrega</div>
         </div>
-        <div class="field-hint">Presioná + o Enter para agregar</div>
       </div>
 
-      <div class="form-divider"></div>
-
-      <!-- ── PASOS ítem a ítem ── -->
-      <div class="field">
-        <label>Pasos de preparación</label>
+      <!-- ── SECCIÓN: Preparación ── -->
+      <div class="fsec">
+        <div class="fsec-title">Preparación</div>
         <div class="item-list" id="step-list"></div>
-        <div class="item-add-row" id="step-add-row">
+
+        <div class="step-add-wrap">
           <div class="step-next-badge" id="step-next-num">1</div>
-          <input id="step-input" type="text" placeholder="Escribir el siguiente paso..."
-                 class="item-add-name" style="flex:1" onkeydown="onStepKey(event)">
-          <button class="item-add-btn" onclick="addStep()" type="button">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          <input id="step-input" type="text" placeholder="Describí el siguiente paso..."
+                 class="step-text-input" onkeydown="onStepKey(event)">
+          <button class="ing-add-btn" onclick="addStep()" type="button">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M7.5 2v11M2 7.5h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </button>
         </div>
-        <div class="field-hint">Presioná + o Enter para agregar</div>
+        <div class="field-hint">Presioná Enter o + para agregar el paso</div>
       </div>
 
-      <div class="form-divider"></div>
-
-      <!-- Etiquetas -->
-      <div class="field" style="padding-bottom: 8px;">
-        <label>Etiquetas</label>
-        <input id="f-tags" type="text" placeholder="Vegetariano, Sin gluten, Rápido">
-        <div class="field-hint">Separadas por coma</div>
+      <!-- ── SECCIÓN: Extra ── -->
+      <div class="fsec">
+        <div class="fsec-title">Etiquetas</div>
+        <div class="field">
+          <input id="f-tags" type="text" placeholder="Vegetariano, Sin gluten, Rápido">
+          <div class="field-hint">Separadas por coma</div>
+        </div>
       </div>
 
     </div>

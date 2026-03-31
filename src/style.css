@@ -609,6 +609,7 @@ body {
   font-size: 14px;
   color: var(--text-2);
   cursor: pointer;
+  padding: 4px 0;
 }
 
 .form-title {
@@ -624,7 +625,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 0;
 }
 
 .form-save:disabled { color: var(--text-3); }
@@ -632,20 +633,32 @@ body {
 .form-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 18px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding-bottom: calc(var(--safe-bottom) + 24px);
+  background: var(--bg-2);
 }
 
 .form-scroll::-webkit-scrollbar { display: none; }
 
-/* Divisor de secciones del form */
-.form-divider {
-  height: 0.5px;
-  background: var(--border);
-  margin: 2px 0;
+/* ── Secciones del formulario ─── */
+.fsec {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fsec-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 
 /* 2 columnas */
@@ -654,7 +667,6 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-
 
 /* ═══════════════════════════════════════════════════════════════
    FIELDS — campos de formulario
@@ -668,7 +680,7 @@ body {
 .field label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-3);
 }
@@ -692,89 +704,84 @@ body {
 
 .field textarea {
   height: auto;
-  min-height: 72px;
+  min-height: 68px;
   padding: 10px 12px;
-  resize: vertical;
+  resize: none;
   line-height: 1.6;
 }
 
 .field input:focus,
 .field textarea:focus,
-.field select:focus {
-  border-color: var(--green);
-}
+.field select:focus { border-color: var(--green); }
 
 .field-hint {
   font-size: 11px;
   color: var(--text-3);
+  line-height: 1.5;
 }
 
-/* Zona de foto */
-.photo-zone {
-  height: 88px;
-  border: 1px dashed var(--border-2);
+/* ── Foto hero ──────────────────────────────────────────────── */
+.photo-hero {
+  height: 180px;
   border-radius: var(--radius);
-  background: var(--bg-2);
+  background: var(--bg-3);
+  border: 1.5px dashed var(--border-2);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
   cursor: pointer;
+  overflow: hidden;
+  position: relative;
 }
 
-.photo-zone-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 0.5px solid var(--border-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
+.photo-hero img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.photo-zone-label {
-  font-size: 12px;
+.photo-hero-icon { font-size: 28px; }
+
+.photo-hero-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.photo-hero-hint {
+  font-size: 11px;
   color: var(--text-3);
 }
 
-.photo-preview {
-  width: 100%;
-  height: 140px;
-  object-fit: cover;
-  border-radius: var(--radius);
-  display: block;
-}
-
-.photo-change-btn {
-  margin-top: 6px;
-  width: 100%;
-  height: 34px;
-  border: 0.5px solid var(--border-2);
-  border-radius: var(--radius-sm);
-  background: var(--bg-2);
-  color: var(--text-2);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
+.photo-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
   gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
+.photo-hero:hover .photo-hero-overlay,
+.photo-hero:active .photo-hero-overlay { opacity: 1; }
 
 /* ═══════════════════════════════════════════════════════════════
-   ITEM LISTS — ingredientes y pasos ítem a ítem
+   ITEM LISTS — ingredientes y pasos
    ═══════════════════════════════════════════════════════════════ */
-
 .item-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 8px;
 }
 
 /* Ítem de ingrediente */
@@ -782,15 +789,15 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   background: var(--bg-2);
   border-radius: var(--radius-sm);
   animation: item-in 0.15s ease;
 }
 
 .ing-item-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--green);
   flex-shrink: 0;
@@ -808,38 +815,18 @@ body {
 .ing-item-qty {
   font-size: 12px;
   color: var(--text-2);
-  margin-right: 2px;
-}
-
-.item-del-btn {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 0.5px solid var(--border-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  color: var(--text-3);
-  font-size: 14px;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-
-.item-del-btn:hover {
-  background: #fde8e8;
-  color: #c0392b;
-  border-color: #f0b8b8;
+  background: var(--bg-3);
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
 }
 
 /* Ítem de paso */
 .step-item-form {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 9px 10px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--bg-2);
   border-radius: var(--radius-sm);
   animation: item-in 0.15s ease;
@@ -850,9 +837,9 @@ body {
   height: 22px;
   border-radius: 50%;
   background: var(--green);
-  color: var(--green-light);
-  font-size: 11px;
-  font-weight: 600;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -867,76 +854,110 @@ body {
   line-height: 1.55;
 }
 
-/* Fila de agregar ítem (pasos) */
-.item-add-row {
+.item-del-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 16px;
+  line-height: 1;
+  transition: color 0.15s;
 }
 
-/* Bloque de agregar ingrediente (2 filas) */
+.item-del-btn:hover { color: #c0392b; }
+
+@keyframes item-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Agregar ingrediente ────────────────────────────────────── */
 .ing-add-wrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding-top: 4px;
 }
 
-.ing-add-bottom {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.item-add-name {
-  flex: 1;
-  height: 36px;
-  padding: 0 10px;
+.ing-name-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
   border: 0.5px solid var(--green);
   border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   outline: none;
-  min-width: 0;
-  width: 100%;
 }
 
-.item-add-qty-num {
+.ing-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ing-qty-input {
   width: 64px;
   flex-shrink: 0;
   height: 36px;
-  padding: 0 8px;
+  padding: 0 10px;
   border: 0.5px solid var(--border-2);
   border-radius: var(--radius-sm);
   background: var(--bg-2);
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   outline: none;
   -webkit-appearance: none;
+  text-align: center;
 }
 
-.item-add-qty-num:focus { border-color: var(--green); }
+.ing-qty-input:focus { border-color: var(--green); }
 
-.item-add-unit {
+/* Pills de unidades */
+.unit-pills {
   flex: 1;
-  height: 36px;
-  padding: 0 8px;
-  border: 0.5px solid var(--border-2);
-  border-radius: var(--radius-sm);
-  background: var(--bg-2);
-  color: var(--text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  -webkit-appearance: none;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
   min-width: 0;
+  padding-bottom: 2px;
 }
 
-.item-add-unit:focus { border-color: var(--green); }
+.unit-pills::-webkit-scrollbar { display: none; }
 
-.item-add-btn {
+.unit-pill {
+  height: 32px;
+  padding: 0 11px;
+  border-radius: var(--radius-full);
+  border: 0.5px solid var(--border-2);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.unit-pill.active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green-dark);
+}
+
+.ing-add-btn {
   width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
@@ -950,26 +971,56 @@ body {
   transition: opacity 0.15s;
 }
 
-.item-add-btn:active { opacity: 0.8; }
+.ing-add-btn:active { opacity: 0.75; }
 
-/* Badge del número del próximo paso */
+/* ── Agregar paso ───────────────────────────────────────────── */
+.step-add-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 .step-next-badge {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--green-light);
   color: var(--green-dark);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-@keyframes item-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: none; }
+.step-text-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: 0.5px solid var(--green);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+
+.item-add-name {
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: 0.5px solid var(--green);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
 }
 
 
