@@ -1,59 +1,45 @@
 import { supabase } from './supabase.js'
 
-// ─── Renderiza la pantalla de login ──────────────────────────────────────────
-export function renderLogin() {
-  document.getElementById('app').innerHTML = `
-    <div class="auth-wrap">
-      <div class="auth-card">
-        <div class="auth-logo">🍳</div>
-        <div class="auth-title">Chef Personal</div>
-        <div class="auth-sub">Tu recetario privado</div>
+let isRegister = false
 
-        <div class="field" style="margin-top:28px">
-          <label>Email</label>
-          <input id="a-email" type="email" placeholder="tu@email.com" autocomplete="email">
-        </div>
-        <div class="field" style="margin-top:14px">
-          <label>Contraseña</label>
-          <input id="a-pass" type="password" placeholder="••••••••" autocomplete="current-password">
-        </div>
+const $ = id => document.getElementById(id)
 
-        <div class="auth-error" id="a-error"></div>
-
-        <button class="auth-btn" id="a-submit" onclick="handleLogin()">Entrar</button>
-
-        <div class="auth-footer">
-          ¿Primera vez? <span class="auth-link" onclick="toggleMode()">Crear cuenta</span>
-        </div>
-      </div>
-    </div>
-  `
-
-  // Enter para enviar
-  document.getElementById('a-pass').addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin()
+// ─── Inicializa listeners del formulario de auth ──────────────────────────────
+export function initAuth() {
+  $('a-pass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.handleLogin()
   })
 }
 
-// ─── Toggle login / registro ─────────────────────────────────────────────────
-let isRegister = false
-
-window.toggleMode = function () {
-  isRegister = !isRegister
-  document.getElementById('a-submit').textContent = isRegister ? 'Crear cuenta' : 'Entrar'
-  document.getElementById('a-error').textContent = ''
-  const footer = document.querySelector('.auth-footer')
-  footer.innerHTML = isRegister
-    ? '¿Ya tenés cuenta? <span class="auth-link" onclick="toggleMode()">Iniciar sesión</span>'
-    : '¿Primera vez? <span class="auth-link" onclick="toggleMode()">Crear cuenta</span>'
+// ─── Muestra la pantalla de auth ─────────────────────────────────────────────
+export function showAuthView() {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
+  $('v-auth').classList.add('active')
+  // Resetear estado
+  isRegister = false
+  $('a-submit').textContent = 'Entrar'
+  $('a-error').textContent = ''
+  $('a-error').style.color = '#c0392b'
+  document.querySelector('.auth-footer').innerHTML =
+    '¿Primera vez? <span class="auth-link" onclick="toggleAuthMode()">Crear cuenta</span>'
 }
 
-// ─── Login / registro ────────────────────────────────────────────────────────
+// ─── Toggle login / registro ──────────────────────────────────────────────────
+window.toggleAuthMode = function () {
+  isRegister = !isRegister
+  $('a-submit').textContent = isRegister ? 'Crear cuenta' : 'Entrar'
+  $('a-error').textContent = ''
+  document.querySelector('.auth-footer').innerHTML = isRegister
+    ? '¿Ya tenés cuenta? <span class="auth-link" onclick="toggleAuthMode()">Iniciar sesión</span>'
+    : '¿Primera vez? <span class="auth-link" onclick="toggleAuthMode()">Crear cuenta</span>'
+}
+
+// ─── Login / registro ─────────────────────────────────────────────────────────
 window.handleLogin = async function () {
-  const email = document.getElementById('a-email').value.trim()
-  const pass  = document.getElementById('a-pass').value
-  const btn   = document.getElementById('a-submit')
-  const errEl = document.getElementById('a-error')
+  const email = $('a-email').value.trim()
+  const pass  = $('a-pass').value
+  const btn   = $('a-submit')
+  const errEl = $('a-error')
 
   if (!email || !pass) { errEl.textContent = 'Completá email y contraseña'; return }
 
@@ -69,6 +55,7 @@ window.handleLogin = async function () {
 
   if (error) {
     errEl.textContent = translateError(error.message)
+    errEl.style.color = '#c0392b'
     btn.disabled = false
     btn.textContent = isRegister ? 'Crear cuenta' : 'Entrar'
     return
@@ -81,15 +68,15 @@ window.handleLogin = async function () {
     btn.disabled = false
     isRegister = false
   }
-  // Si el login es exitoso, onAuthStateChange en main.js se encarga de mostrar la app
+  // Si el login es exitoso, onAuthStateChange en main.js muestra la app
 }
 
-// ─── Logout ──────────────────────────────────────────────────────────────────
+// ─── Logout ───────────────────────────────────────────────────────────────────
 export async function logout() {
   await supabase.auth.signOut()
 }
 
-// ─── Traducción de errores comunes ───────────────────────────────────────────
+// ─── Traducción de errores ────────────────────────────────────────────────────
 function translateError(msg) {
   if (msg.includes('Invalid login')) return 'Email o contraseña incorrectos'
   if (msg.includes('Email not confirmed')) return 'Confirmá tu email antes de entrar'

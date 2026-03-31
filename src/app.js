@@ -6,17 +6,17 @@ let recipes = []
 let activeCat = 'Todas'
 let curRecipe = null
 let curServ = 4
-let baseServ = 4
 let editingId = null
 let photoFile = null
 let photoPreviewUrl = null
 let formIngredients = []
 let formSteps = []
+let appInitialized = false
 
 const CATS = ['Todas', 'Entrada', 'Principal', 'Postre', 'Sopa', 'Otro']
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id)
+
 const showView = id => {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
   $(id).classList.add('active')
@@ -26,150 +26,18 @@ let toastTimer
 function toast(msg, isError = false) {
   const t = $('toast')
   t.textContent = msg
-  t.style.background = isError ? '#c0392b' : '#222'
-  t.classList.add('show')
+  t.className = 'toast show' + (isError ? ' error' : '')
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => t.classList.remove('show'), 2800)
 }
 
-// ─── App shell ────────────────────────────────────────────────────────────────
-export function renderApp(userEmail) {
-  document.getElementById('app').innerHTML = `
-
-    <!-- LIST -->
-    <div class="view active" id="v-list">
-      <div class="topbar">
-        <div class="topbar-row">
-          <div>
-            <div class="topbar-label">Tu recetario</div>
-            <div class="topbar-title">Chef Personal</div>
-          </div>
-          <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión">⎋</button>
-        </div>
-        <div class="search-wrap">
-          <div class="search-box">
-            <span class="search-icon">⌕</span>
-            <input id="search" type="search" placeholder="Buscar receta...">
-          </div>
-        </div>
-      </div>
-      <div class="cats" id="cat-wrap"></div>
-      <div class="recipe-list" id="rlist">
-        <div class="loading-wrap"><div class="spinner"></div></div>
-      </div>
-      <button class="fab" id="fab-add" title="Nueva receta">+</button>
-    </div>
-
-    <!-- DETAIL -->
-    <div class="view" id="v-detail">
-      <div class="detail-hero" id="d-hero"></div>
-      <div class="detail-scroll">
-        <div class="detail-head">
-          <div class="detail-title" id="d-title"></div>
-          <div class="detail-desc"  id="d-desc"></div>
-          <div class="meta-row"     id="d-meta"></div>
-        </div>
-        <div class="section">
-          <div class="section-label">Porciones</div>
-          <div class="serv-row">
-            <button class="serv-btn" id="serv-dec">−</button>
-            <span class="serv-val" id="d-serv">4</span>
-            <button class="serv-btn" id="serv-inc">+</button>
-            <span class="serv-lbl">personas</span>
-          </div>
-          <div class="section-label" style="margin-top:14px">Ingredientes</div>
-          <div class="ings-grid" id="d-ings"></div>
-        </div>
-        <div class="section">
-          <div class="section-label">Preparación</div>
-          <div class="steps" id="d-steps"></div>
-        </div>
-        <div class="section last" style="display:flex;justify-content:center">
-          <button id="btn-delete" class="danger-btn">Eliminar receta</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- FORM -->
-    <div class="view" id="v-form">
-      <div class="form-header">
-        <span class="form-cancel" id="form-cancel">Cancelar</span>
-        <span class="form-title-h" id="form-title-h">Nueva receta</span>
-        <button class="form-save" id="form-save-btn">Guardar</button>
-      </div>
-      <div class="form-body">
-        <div class="field">
-          <label>Foto del plato</label>
-          <div id="photo-wrap"></div>
-          <input type="file" id="photo-input" accept="image/*" style="display:none">
-        </div>
-        <div class="field">
-          <label>Nombre del plato</label>
-          <input id="f-name" type="text" placeholder="Ej: Risotto de hongos">
-        </div>
-        <div class="field">
-          <label>Emoji (si no hay foto)</label>
-          <input id="f-emoji" type="text" placeholder="🍝" maxlength="2">
-        </div>
-        <div class="field">
-          <label>Categoría</label>
-          <select id="f-cat">
-            <option value="Entrada">Entrada</option>
-            <option value="Principal" selected>Principal</option>
-            <option value="Postre">Postre</option>
-            <option value="Sopa">Sopa</option>
-            <option value="Otro">Otro</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Descripción breve</label>
-          <textarea id="f-desc" placeholder="Una línea que resume el plato..."></textarea>
-        </div>
-        <div class="field">
-          <label>Tiempo total</label>
-          <input id="f-time" type="text" placeholder="Ej: 35 min">
-        </div>
-        <div class="field">
-          <label>Dificultad</label>
-          <select id="f-diff">
-            <option>Fácil</option>
-            <option selected>Media</option>
-            <option>Alta</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Porciones base</label>
-          <input id="f-serv" type="number" min="1" max="20" value="4">
-        </div>
-        <div class="field">
-          <label>Ingredientes</label>
-          <div class="list-input-row">
-            <input id="f-ing-name" type="text" placeholder="Nombre del ingrediente">
-            <input id="f-ing-qty" type="text" placeholder="Cantidad">
-            <button class="list-add-btn" id="btn-add-ing" type="button">+</button>
-          </div>
-          <div id="ing-list" class="form-list"></div>
-        </div>
-        <div class="field">
-          <label>Pasos de preparación</label>
-          <div class="list-input-row">
-            <input id="f-step-text" type="text" placeholder="Describe el paso...">
-            <button class="list-add-btn" id="btn-add-step" type="button">+</button>
-          </div>
-          <div id="step-list" class="form-list"></div>
-        </div>
-        <div class="field">
-          <label>Etiquetas</label>
-          <input id="f-tags" type="text" placeholder="Vegetariano, Rápido, Sin gluten">
-          <div class="field-hint">Separadas por coma</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="toast" id="toast"></div>
-  `
-
-  bindEvents()
+// ─── Init ─────────────────────────────────────────────────────────────────────
+export function initApp() {
+  if (!appInitialized) {
+    bindEvents()
+    appInitialized = true
+  }
+  showView('v-list')
   initList()
 }
 
@@ -183,77 +51,6 @@ function bindEvents() {
   $('form-cancel').addEventListener('click', () => showView('v-list'))
   $('form-save-btn').addEventListener('click', handleSave)
   $('photo-input').addEventListener('change', onPhotoChange)
-
-  // Ingredientes
-  $('btn-add-ing').addEventListener('click', addIngredient)
-  $('f-ing-qty').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addIngredient() } })
-  $('f-ing-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-ing-qty').focus() } })
-
-  // Pasos
-  $('btn-add-step').addEventListener('click', addStep)
-  $('f-step-text').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStep() } })
-}
-
-function addIngredient() {
-  const name = $('f-ing-name').value.trim()
-  if (!name) { $('f-ing-name').focus(); return }
-  const qty = $('f-ing-qty').value.trim()
-  formIngredients.push({ name, qty })
-  $('f-ing-name').value = ''
-  $('f-ing-qty').value = ''
-  $('f-ing-name').focus()
-  renderIngList()
-}
-
-function addStep() {
-  const text = $('f-step-text').value.trim()
-  if (!text) { $('f-step-text').focus(); return }
-  formSteps.push(text)
-  $('f-step-text').value = ''
-  $('f-step-text').focus()
-  renderStepList()
-}
-
-function renderIngList() {
-  const el = $('ing-list')
-  if (!formIngredients.length) {
-    el.innerHTML = '<div class="form-list-empty">Aún no hay ingredientes</div>'
-    return
-  }
-  el.innerHTML = formIngredients.map((ing, i) => `
-    <div class="form-list-item">
-      <div class="ing-dot"></div>
-      <span class="form-list-text">${ing.name}${ing.qty ? ` <span class="form-list-qty">— ${ing.qty}</span>` : ''}</span>
-      <button class="form-list-del" data-i="${i}" type="button">×</button>
-    </div>
-  `).join('')
-  el.querySelectorAll('.form-list-del').forEach(btn =>
-    btn.addEventListener('click', () => {
-      formIngredients.splice(parseInt(btn.dataset.i), 1)
-      renderIngList()
-    })
-  )
-}
-
-function renderStepList() {
-  const el = $('step-list')
-  if (!formSteps.length) {
-    el.innerHTML = '<div class="form-list-empty">Aún no hay pasos</div>'
-    return
-  }
-  el.innerHTML = formSteps.map((s, i) => `
-    <div class="form-list-item">
-      <div class="form-step-num">${i + 1}</div>
-      <span class="form-list-text">${s}</span>
-      <button class="form-list-del" data-i="${i}" type="button">×</button>
-    </div>
-  `).join('')
-  el.querySelectorAll('.form-list-del').forEach(btn =>
-    btn.addEventListener('click', () => {
-      formSteps.splice(parseInt(btn.dataset.i), 1)
-      renderStepList()
-    })
-  )
 }
 
 window.handleLogout = async function () {
@@ -262,6 +59,7 @@ window.handleLogout = async function () {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 async function initList() {
+  $('rlist').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>'
   try {
     recipes = await fetchRecipes()
   } catch {
@@ -276,7 +74,7 @@ function renderCats() {
   wrap.innerHTML = ''
   CATS.forEach(c => {
     const btn = document.createElement('button')
-    btn.className = 'cat' + (activeCat === c ? ' on' : '')
+    btn.className = 'cat-pill' + (activeCat === c ? ' active' : '')
     btn.textContent = c
     btn.addEventListener('click', () => { activeCat = c; renderCats(); renderList() })
     wrap.appendChild(btn)
@@ -291,22 +89,29 @@ function renderList() {
 
   const wrap = $('rlist')
   if (!list.length) {
-    wrap.innerHTML = `<div class="empty"><div class="empty-icon">🍽</div><div class="empty-txt">Sin resultados.<br>Usá el botón + para agregar tu primera receta.</div></div>`
+    wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🍽</div>
+        <div class="empty-state-text">Sin resultados.<br>Usá el botón + para agregar tu primera receta.</div>
+      </div>`
     return
   }
 
   wrap.innerHTML = list.map(r => `
-    <div class="card" data-id="${r.id}">
+    <div class="recipe-card" data-id="${r.id}">
       ${r.photo_url
-        ? `<img class="card-photo" src="${r.photo_url}" alt="${r.name}" loading="lazy">`
-        : `<div class="card-photo-empty">${r.emoji || '🍽'}</div>`}
-      <div class="card-body">
-        <div class="card-row">
-          <div class="card-name">${r.name}</div>
-          <div class="card-time">⏱ ${r.time || '—'}</div>
-        </div>
-        <div class="card-desc">${r.description || ''}</div>
-        <div class="card-tags">
+        ? `<div style="position:relative">
+             <img class="recipe-card-photo" src="${r.photo_url}" alt="${r.name}" loading="lazy">
+             ${r.time ? `<div class="time-chip">⏱ ${r.time}</div>` : ''}
+           </div>`
+        : `<div class="recipe-card-placeholder">
+             ${r.emoji || '🍽'}
+             ${r.time ? `<div class="time-chip">⏱ ${r.time}</div>` : ''}
+           </div>`}
+      <div class="recipe-card-body">
+        <div class="recipe-card-name">${r.name}</div>
+        ${r.description ? `<div class="recipe-card-desc">${r.description}</div>` : ''}
+        <div class="recipe-card-tags">
           ${(r.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}
           ${r.difficulty ? `<span class="tag">${r.difficulty}</span>` : ''}
         </div>
@@ -314,7 +119,7 @@ function renderList() {
     </div>
   `).join('')
 
-  wrap.querySelectorAll('.card').forEach(card => {
+  wrap.querySelectorAll('.recipe-card').forEach(card => {
     card.addEventListener('click', () => {
       const r = recipes.find(x => String(x.id) === card.dataset.id)
       if (r) openDetail(r)
@@ -325,18 +130,20 @@ function renderList() {
 // ─── Detail ───────────────────────────────────────────────────────────────────
 function openDetail(r) {
   curRecipe = r
-  baseServ = r.servings || 4
-  curServ = baseServ
+  curServ = r.servings || 4
 
   const hero = $('d-hero')
   hero.innerHTML = r.photo_url
-    ? `<img src="${r.photo_url}" alt="${r.name}" style="width:100%;height:100%;object-fit:cover;display:block">`
-    : `<div class="detail-hero-empty">${r.emoji || '🍽'}</div>`
+    ? `<img src="${r.photo_url}" alt="${r.name}">`
+    : r.emoji || '🍽'
   hero.insertAdjacentHTML('beforeend', `
-    <button class="back-btn" onclick="document.getElementById('v-list').classList.add('active');document.getElementById('v-detail').classList.remove('active')">‹</button>
-    <button class="edit-btn" data-id="${r.id}">Editar</button>
+    <button class="detail-hero-back" onclick="
+      document.getElementById('v-list').classList.add('active');
+      document.getElementById('v-detail').classList.remove('active')
+    ">‹</button>
+    <button class="detail-hero-edit" id="detail-edit-btn">Editar</button>
   `)
-  hero.querySelector('.edit-btn').addEventListener('click', () => openForm(r))
+  $('detail-edit-btn').addEventListener('click', () => openForm(r))
 
   $('d-title').textContent = r.name
   $('d-desc').textContent = r.description || ''
@@ -349,7 +156,11 @@ function openDetail(r) {
   renderDetailIngs()
 
   $('d-steps').innerHTML = (r.steps || [])
-    .map((s, i) => `<div class="step"><div class="step-n">${i + 1}</div><div class="step-txt">${s}</div></div>`)
+    .map((s, i) => `
+      <div class="step-row">
+        <div class="step-num">${i + 1}</div>
+        <div class="step-text">${s}</div>
+      </div>`)
     .join('')
 
   showView('v-detail')
@@ -358,7 +169,7 @@ function openDetail(r) {
 function renderDetailIngs() {
   $('d-ings').innerHTML = (curRecipe.ingredients || [])
     .map(ing => `
-      <div class="ing">
+      <div class="ing-item">
         <div class="ing-dot"></div>
         <div class="ing-name">${ing.name || ing}</div>
         <div class="ing-qty">${ing.qty || ''}</div>
@@ -390,24 +201,24 @@ function openForm(recipe = null) {
   photoFile = null
   photoPreviewUrl = recipe?.photo_url || null
 
-  $('form-title-h').textContent = recipe ? 'Editar receta' : 'Nueva receta'
-  $('f-name').value    = recipe?.name || ''
-  $('f-cat').value     = recipe?.cat  || 'Principal'
-  $('f-emoji').value   = recipe?.emoji || ''
-  $('f-desc').value    = recipe?.description || ''
-  $('f-time').value    = recipe?.time || ''
-  $('f-diff').value    = recipe?.difficulty || 'Media'
-  $('f-serv').value    = recipe?.servings || 4
-  $('f-tags').value    = (recipe?.tags || []).join(', ')
+  $('form-title').textContent = recipe ? 'Editar receta' : 'Nueva receta'
+  $('f-name').value  = recipe?.name || ''
+  $('f-cat').value   = recipe?.cat  || 'Principal'
+  $('f-emoji').value = recipe?.emoji || ''
+  $('f-desc').value  = recipe?.description || ''
+  $('f-time').value  = recipe?.time || ''
+  $('f-diff').value  = recipe?.difficulty || 'Media'
+  $('f-serv').value  = recipe?.servings || 4
+  $('f-tags').value  = (recipe?.tags || []).join(', ')
 
   formIngredients = (recipe?.ingredients || []).map(i => ({ name: i.name || i, qty: i.qty || '' }))
   formSteps = [...(recipe?.steps || [])]
 
   renderPhotoArea()
   showView('v-form')
-  // Render lists after view is shown so elements exist
   renderIngList()
   renderStepList()
+  updateStepNextNum()
 }
 
 function renderPhotoArea() {
@@ -415,18 +226,20 @@ function renderPhotoArea() {
   if (photoPreviewUrl) {
     wrap.innerHTML = `<img class="photo-preview" src="${photoPreviewUrl}" alt="preview">`
     const btn = document.createElement('button')
-    btn.className = 'photo-btn'
-    btn.style.marginTop = '8px'
+    btn.className = 'photo-change-btn'
+    btn.type = 'button'
     btn.textContent = '📷 Cambiar foto'
     btn.addEventListener('click', () => $('photo-input').click())
     wrap.appendChild(btn)
   } else {
+    const zone = document.createElement('div')
+    zone.className = 'photo-zone'
+    zone.innerHTML = `
+      <div class="photo-zone-icon">📷</div>
+      <div class="photo-zone-label">Agregar foto del plato</div>`
+    zone.addEventListener('click', () => $('photo-input').click())
     wrap.innerHTML = ''
-    const btn = document.createElement('button')
-    btn.className = 'photo-btn'
-    btn.textContent = '📷 Agregar foto del plato'
-    btn.addEventListener('click', () => $('photo-input').click())
-    wrap.appendChild(btn)
+    wrap.appendChild(zone)
   }
 }
 
@@ -438,6 +251,92 @@ function onPhotoChange(e) {
   renderPhotoArea()
 }
 
+// ─── Form list helpers (expuestas globalmente para los onclick del HTML) ───────
+window.addIng = function () {
+  const nameEl = $('ing-input-name')
+  const qtyEl  = $('ing-input-qty')
+  const name = nameEl.value.trim()
+  if (!name) { nameEl.focus(); return }
+  formIngredients.push({ name, qty: qtyEl.value.trim() })
+  nameEl.value = ''
+  qtyEl.value = ''
+  nameEl.focus()
+  renderIngList()
+}
+
+window.addStep = function () {
+  const input = $('step-input')
+  const text = input.value.trim()
+  if (!text) { input.focus(); return }
+  formSteps.push(text)
+  input.value = ''
+  input.focus()
+  renderStepList()
+  updateStepNextNum()
+}
+
+window.onIngKey = function (e) {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    if (e.target.id === 'ing-input-name') $('ing-input-qty').focus()
+    else window.addIng()
+  }
+}
+
+window.onStepKey = function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); window.addStep() }
+}
+
+function updateStepNextNum() {
+  const el = $('step-next-num')
+  if (el) el.textContent = formSteps.length + 1
+}
+
+function renderIngList() {
+  const el = $('ing-list')
+  if (!formIngredients.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:2px 0">Aún no hay ingredientes</div>'
+    return
+  }
+  el.innerHTML = formIngredients.map((ing, i) => `
+    <div class="ing-item-form">
+      <div class="ing-item-dot"></div>
+      <span class="ing-item-name">${ing.name}</span>
+      ${ing.qty ? `<span class="ing-item-qty">${ing.qty}</span>` : ''}
+      <button class="item-del-btn" data-i="${i}" type="button">×</button>
+    </div>
+  `).join('')
+  el.querySelectorAll('.item-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      formIngredients.splice(parseInt(btn.dataset.i), 1)
+      renderIngList()
+    })
+  )
+}
+
+function renderStepList() {
+  const el = $('step-list')
+  if (!formSteps.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:2px 0">Aún no hay pasos</div>'
+    return
+  }
+  el.innerHTML = formSteps.map((s, i) => `
+    <div class="step-item-form">
+      <div class="step-item-badge">${i + 1}</div>
+      <span class="step-item-text">${s}</span>
+      <button class="item-del-btn" data-i="${i}" type="button">×</button>
+    </div>
+  `).join('')
+  el.querySelectorAll('.item-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      formSteps.splice(parseInt(btn.dataset.i), 1)
+      renderStepList()
+      updateStepNextNum()
+    })
+  )
+}
+
+// ─── Save ─────────────────────────────────────────────────────────────────────
 async function handleSave() {
   const name = $('f-name').value.trim()
   if (!name) { toast('Ingresá el nombre del plato', true); return }
@@ -468,7 +367,6 @@ async function handleSave() {
       saved.photo_url = url
       await upsertRecipe({ id: saved.id, photo_url: url })
     }
-    // Actualizar cache local
     const idx = recipes.findIndex(r => r.id === saved.id)
     if (idx >= 0) recipes[idx] = { ...recipes[idx], ...saved }
     else recipes.unshift(saved)

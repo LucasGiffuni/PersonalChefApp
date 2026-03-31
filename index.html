@@ -12,7 +12,248 @@
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.js"></script>
+<div id="app">
+
+  <!-- ════════════════════════════════════════════
+       VISTA: LOGIN
+  ════════════════════════════════════════════ -->
+  <div class="view active" id="v-auth">
+    <div class="auth-bg">
+      <div class="auth-card">
+        <div class="auth-icon">🍳</div>
+        <div class="auth-title">Chef Personal</div>
+        <div class="auth-subtitle">Tu recetario privado</div>
+
+        <div class="field" style="margin-top: 24px;">
+          <label>Email</label>
+          <input id="a-email" type="email" placeholder="tu@email.com" autocomplete="email">
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input id="a-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+
+        <div class="auth-error" id="a-error"></div>
+        <button class="btn-primary btn-full" id="a-submit" onclick="handleLogin()">Entrar</button>
+        <div class="auth-footer">
+          ¿Primera vez? <span class="auth-link" onclick="toggleAuthMode()">Crear cuenta</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: LISTA DE RECETAS
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-list">
+
+    <div class="list-header">
+      <div class="list-header-row">
+        <div>
+          <div class="list-greeting">Tu recetario</div>
+          <div class="list-title">Chef Personal</div>
+        </div>
+        <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M7 3H3a1 1 0 00-1 1v10a1 1 0 001 1h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M12 13l4-4-4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 9H7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="search-box">
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 15 15" fill="none">
+          <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <input id="search" type="search" placeholder="Buscar receta...">
+      </div>
+
+      <div class="cat-strip" id="cat-wrap"></div>
+    </div>
+
+    <div class="recipe-list" id="rlist">
+      <div class="loading-wrap"><div class="spinner"></div></div>
+    </div>
+
+    <button class="fab" id="fab-add" title="Nueva receta">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: DETALLE DE RECETA
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-detail">
+
+    <div class="detail-hero" id="d-hero"></div>
+
+    <div class="detail-scroll">
+
+      <div class="detail-head">
+        <div class="detail-title" id="d-title"></div>
+        <div class="detail-desc"  id="d-desc"></div>
+        <div class="meta-chips"   id="d-meta"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Porciones</div>
+        <div class="serv-row">
+          <button class="serv-btn" id="serv-dec">−</button>
+          <span class="serv-val" id="d-serv">4</span>
+          <button class="serv-btn" id="serv-inc">+</button>
+          <span class="serv-label">personas</span>
+        </div>
+
+        <div class="section-label" style="margin-top: 16px;">Ingredientes</div>
+        <div class="ings-grid" id="d-ings"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Preparación</div>
+        <div class="steps-list" id="d-steps"></div>
+      </div>
+
+      <div class="section section-last">
+        <button class="btn-danger" id="btn-delete">Eliminar receta</button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: FORMULARIO (nueva / editar receta)
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-form">
+
+    <div class="form-header">
+      <span class="form-cancel" id="form-cancel">Cancelar</span>
+      <span class="form-title"  id="form-title">Nueva receta</span>
+      <button class="form-save" id="form-save-btn">Guardar</button>
+    </div>
+
+    <div class="form-scroll">
+
+      <!-- Foto -->
+      <div class="field">
+        <label>Foto del plato</label>
+        <div id="photo-wrap"></div>
+        <input type="file" id="photo-input" accept="image/*" style="display:none">
+      </div>
+
+      <!-- Nombre -->
+      <div class="field">
+        <label>Nombre del plato</label>
+        <input id="f-name" type="text" placeholder="Ej: Risotto de hongos">
+      </div>
+
+      <!-- Emoji -->
+      <div class="field">
+        <label>Emoji (si no hay foto)</label>
+        <input id="f-emoji" type="text" placeholder="🍝" maxlength="2">
+      </div>
+
+      <!-- Categoría + Tiempo en 2 columnas -->
+      <div class="field-row">
+        <div class="field">
+          <label>Categoría</label>
+          <select id="f-cat">
+            <option value="Entrada">Entrada</option>
+            <option value="Principal" selected>Principal</option>
+            <option value="Postre">Postre</option>
+            <option value="Sopa">Sopa</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tiempo total</label>
+          <input id="f-time" type="text" placeholder="35 min">
+        </div>
+      </div>
+
+      <!-- Dificultad + Porciones en 2 columnas -->
+      <div class="field-row">
+        <div class="field">
+          <label>Dificultad</label>
+          <select id="f-diff">
+            <option>Fácil</option>
+            <option selected>Media</option>
+            <option>Alta</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Porciones base</label>
+          <input id="f-serv" type="number" min="1" max="20" value="4">
+        </div>
+      </div>
+
+      <!-- Descripción -->
+      <div class="field">
+        <label>Descripción breve</label>
+        <textarea id="f-desc" placeholder="Una línea que resume el plato..."></textarea>
+      </div>
+
+      <div class="form-divider"></div>
+
+      <!-- ── INGREDIENTES ítem a ítem ── -->
+      <div class="field">
+        <label>Ingredientes</label>
+        <div class="item-list" id="ing-list"></div>
+        <div class="item-add-row" id="ing-add-row">
+          <input id="ing-input-name" type="text" placeholder="Ingrediente..."
+                 class="item-add-name" onkeydown="onIngKey(event)">
+          <input id="ing-input-qty"  type="text" placeholder="Cant."
+                 class="item-add-qty"  onkeydown="onIngKey(event)">
+          <button class="item-add-btn" onclick="addIng()" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="field-hint">Presioná + o Enter para agregar</div>
+      </div>
+
+      <div class="form-divider"></div>
+
+      <!-- ── PASOS ítem a ítem ── -->
+      <div class="field">
+        <label>Pasos de preparación</label>
+        <div class="item-list" id="step-list"></div>
+        <div class="item-add-row" id="step-add-row">
+          <div class="step-next-badge" id="step-next-num">1</div>
+          <input id="step-input" type="text" placeholder="Escribir el siguiente paso..."
+                 class="item-add-name" style="flex:1" onkeydown="onStepKey(event)">
+          <button class="item-add-btn" onclick="addStep()" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="field-hint">Presioná + o Enter para agregar</div>
+      </div>
+
+      <div class="form-divider"></div>
+
+      <!-- Etiquetas -->
+      <div class="field" style="padding-bottom: 8px;">
+        <label>Etiquetas</label>
+        <input id="f-tags" type="text" placeholder="Vegetariano, Sin gluten, Rápido">
+        <div class="field-hint">Separadas por coma</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>
