@@ -258,6 +258,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   cursor: pointer;
+  flex-shrink: 0;
   transition: border-color 0.15s, transform 0.1s;
 }
 
