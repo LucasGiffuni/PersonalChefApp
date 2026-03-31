@@ -10,6 +10,8 @@ let baseServ = 4
 let editingId = null
 let photoFile = null
 let photoPreviewUrl = null
+let formIngredients = []
+let formSteps = []
 
 const CATS = ['Todas', 'Entrada', 'Principal', 'Postre', 'Sopa', 'Otro']
 
@@ -141,15 +143,20 @@ export function renderApp(userEmail) {
         </div>
         <div class="field">
           <label>Ingredientes</label>
-          <textarea id="f-ings" style="min-height:100px"
-            placeholder="Arroz arbóreo — 300 g&#10;Caldo de verduras — 1 L&#10;Manteca — 50 g"></textarea>
-          <div class="field-hint">Un ingrediente por línea — formato: Nombre — Cantidad</div>
+          <div class="list-input-row">
+            <input id="f-ing-name" type="text" placeholder="Nombre del ingrediente">
+            <input id="f-ing-qty" type="text" placeholder="Cantidad">
+            <button class="list-add-btn" id="btn-add-ing" type="button">+</button>
+          </div>
+          <div id="ing-list" class="form-list"></div>
         </div>
         <div class="field">
           <label>Pasos de preparación</label>
-          <textarea id="f-steps" style="min-height:120px"
-            placeholder="Calentar el caldo a fuego bajo.&#10;Saltear la cebolla.&#10;Agregar el arroz."></textarea>
-          <div class="field-hint">Un paso por línea</div>
+          <div class="list-input-row">
+            <input id="f-step-text" type="text" placeholder="Describe el paso...">
+            <button class="list-add-btn" id="btn-add-step" type="button">+</button>
+          </div>
+          <div id="step-list" class="form-list"></div>
         </div>
         <div class="field">
           <label>Etiquetas</label>
@@ -176,6 +183,77 @@ function bindEvents() {
   $('form-cancel').addEventListener('click', () => showView('v-list'))
   $('form-save-btn').addEventListener('click', handleSave)
   $('photo-input').addEventListener('change', onPhotoChange)
+
+  // Ingredientes
+  $('btn-add-ing').addEventListener('click', addIngredient)
+  $('f-ing-qty').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addIngredient() } })
+  $('f-ing-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-ing-qty').focus() } })
+
+  // Pasos
+  $('btn-add-step').addEventListener('click', addStep)
+  $('f-step-text').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addStep() } })
+}
+
+function addIngredient() {
+  const name = $('f-ing-name').value.trim()
+  if (!name) { $('f-ing-name').focus(); return }
+  const qty = $('f-ing-qty').value.trim()
+  formIngredients.push({ name, qty })
+  $('f-ing-name').value = ''
+  $('f-ing-qty').value = ''
+  $('f-ing-name').focus()
+  renderIngList()
+}
+
+function addStep() {
+  const text = $('f-step-text').value.trim()
+  if (!text) { $('f-step-text').focus(); return }
+  formSteps.push(text)
+  $('f-step-text').value = ''
+  $('f-step-text').focus()
+  renderStepList()
+}
+
+function renderIngList() {
+  const el = $('ing-list')
+  if (!formIngredients.length) {
+    el.innerHTML = '<div class="form-list-empty">Aún no hay ingredientes</div>'
+    return
+  }
+  el.innerHTML = formIngredients.map((ing, i) => `
+    <div class="form-list-item">
+      <div class="ing-dot"></div>
+      <span class="form-list-text">${ing.name}${ing.qty ? ` <span class="form-list-qty">— ${ing.qty}</span>` : ''}</span>
+      <button class="form-list-del" data-i="${i}" type="button">×</button>
+    </div>
+  `).join('')
+  el.querySelectorAll('.form-list-del').forEach(btn =>
+    btn.addEventListener('click', () => {
+      formIngredients.splice(parseInt(btn.dataset.i), 1)
+      renderIngList()
+    })
+  )
+}
+
+function renderStepList() {
+  const el = $('step-list')
+  if (!formSteps.length) {
+    el.innerHTML = '<div class="form-list-empty">Aún no hay pasos</div>'
+    return
+  }
+  el.innerHTML = formSteps.map((s, i) => `
+    <div class="form-list-item">
+      <div class="form-step-num">${i + 1}</div>
+      <span class="form-list-text">${s}</span>
+      <button class="form-list-del" data-i="${i}" type="button">×</button>
+    </div>
+  `).join('')
+  el.querySelectorAll('.form-list-del').forEach(btn =>
+    btn.addEventListener('click', () => {
+      formSteps.splice(parseInt(btn.dataset.i), 1)
+      renderStepList()
+    })
+  )
 }
 
 window.handleLogout = async function () {
@@ -320,12 +398,16 @@ function openForm(recipe = null) {
   $('f-time').value    = recipe?.time || ''
   $('f-diff').value    = recipe?.difficulty || 'Media'
   $('f-serv').value    = recipe?.servings || 4
-  $('f-ings').value    = (recipe?.ingredients || []).map(i => `${i.name} — ${i.qty}`).join('\n')
-  $('f-steps').value   = (recipe?.steps || []).join('\n')
   $('f-tags').value    = (recipe?.tags || []).join(', ')
+
+  formIngredients = (recipe?.ingredients || []).map(i => ({ name: i.name || i, qty: i.qty || '' }))
+  formSteps = [...(recipe?.steps || [])]
 
   renderPhotoArea()
   showView('v-form')
+  // Render lists after view is shown so elements exist
+  renderIngList()
+  renderStepList()
 }
 
 function renderPhotoArea() {
@@ -364,11 +446,6 @@ async function handleSave() {
   btn.disabled = true
   btn.textContent = 'Guardando...'
 
-  const ingredients = $('f-ings').value.trim().split('\n').filter(Boolean).map(line => {
-    const [n, q] = line.split('—')
-    return { name: (n || line).trim(), qty: (q || '').trim() }
-  })
-
   const recipe = {
     id:          editingId || undefined,
     name,
@@ -378,8 +455,8 @@ async function handleSave() {
     time:        $('f-time').value.trim(),
     difficulty:  $('f-diff').value,
     servings:    parseInt($('f-serv').value) || 4,
-    ingredients,
-    steps:       $('f-steps').value.trim().split('\n').filter(Boolean),
+    ingredients: formIngredients,
+    steps:       formSteps,
     tags:        $('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     photo_url:   photoPreviewUrl && !photoFile ? photoPreviewUrl : null,
   }
