@@ -161,6 +161,7 @@ function openDetail(r) {
 
   $('d-serv').textContent = curServ
   renderDetailIngs()
+  updateBatchInfo()
 
   $('d-steps').innerHTML = (r.steps || [])
     .map((s, i) => `
@@ -173,20 +174,51 @@ function openDetail(r) {
   showView('v-detail')
 }
 
+function scaleQty(qty, factor) {
+  if (!qty || factor === 1) return qty
+  const m = qty.match(/^(\d+\.?\d*)(.*)$/)
+  if (!m) return qty
+  const scaled = Math.round(parseFloat(m[1]) * factor * 100) / 100
+  const fmt = scaled % 1 === 0 ? String(scaled) : scaled.toFixed(2).replace(/\.?0+$/, '')
+  return fmt + m[2]
+}
+
 function renderDetailIngs() {
+  const factor = curServ / baseServ
   $('d-ings').innerHTML = (curRecipe.ingredients || [])
     .map(ing => `
       <div class="ing-item">
         <div class="ing-dot"></div>
         <div class="ing-name">${ing.name || ing}</div>
-        <div class="ing-qty">${ing.qty || ''}</div>
+        <div class="ing-qty">${scaleQty(ing.qty || '', factor)}</div>
       </div>`)
     .join('')
+}
+
+function updateBatchInfo() {
+  const el = $('d-batch-info')
+  if (curServ === baseServ) {
+    el.style.display = 'none'
+    return
+  }
+  const factor = curServ / baseServ
+  const batches = Math.ceil(factor)
+  const fmtFactor = factor % 1 === 0 ? factor : factor.toFixed(2).replace(/\.?0+$/, '')
+  el.style.display = ''
+  el.innerHTML = `
+    <div class="batch-factor">×${fmtFactor}</div>
+    <div class="batch-detail">
+      <div class="batch-main">${batches === 1 ? 'Con 1 tanda alcanza' : `Necesitás ${batches} tandas`}</div>
+      <div class="batch-sub">Receta base: ${baseServ} personas · Factor ×${fmtFactor}</div>
+    </div>
+  `
 }
 
 function changeServ(d) {
   curServ = Math.max(1, curServ + d)
   $('d-serv').textContent = curServ
+  renderDetailIngs()
+  updateBatchInfo()
 }
 
 async function handleDelete() {

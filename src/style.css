@@ -517,6 +517,49 @@ body {
   color: var(--text-2);
 }
 
+/* Panel de escalado de receta */
+.batch-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 11px 14px;
+  background: var(--green-light);
+  border-radius: var(--radius-sm);
+  border: 0.5px solid rgba(29, 158, 117, 0.25);
+}
+
+.batch-factor {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green-dark);
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+.batch-detail { display: flex; flex-direction: column; gap: 2px; }
+
+.batch-main {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-text);
+}
+
+.batch-sub {
+  font-size: 11px;
+  color: var(--green-dark);
+  opacity: 0.8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .batch-info {
+    background: rgba(29, 158, 117, 0.15);
+    border-color: rgba(29, 158, 117, 0.3);
+  }
+  .batch-factor, .batch-main { color: #5DCAA5; }
+  .batch-sub { color: #4ab892; }
+}
+
 /* Grid de ingredientes */
 .ings-grid {
   display: grid;
