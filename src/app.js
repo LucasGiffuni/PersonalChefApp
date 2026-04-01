@@ -6,6 +6,7 @@ let recipes = []
 let activeCat = 'Todas'
 let curRecipe = null
 let curServ = 4
+let baseServ = 4
 let editingId = null
 let photoFile = null
 let photoPreviewUrl = null
