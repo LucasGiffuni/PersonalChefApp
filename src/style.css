@@ -1177,3 +1177,139 @@ body {
 }
 
 .toast.error { background: #c0392b; }
+
+/* ═══════════════════════════════════════════════════════════════
+   VIEW BODY — contenedor de lista + FAB
+   ═══════════════════════════════════════════════════════════════ */
+.view-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BOTTOM NAV
+   ═══════════════════════════════════════════════════════════════ */
+.bottom-nav {
+  display: flex;
+  flex-shrink: 0;
+  height: calc(56px + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--bg);
+  border-top: 0.5px solid var(--border);
+}
+
+.bnav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+  transition: color 0.15s;
+  padding: 0;
+}
+
+.bnav-btn.bnav-active { color: var(--green); }
+
+/* ═══════════════════════════════════════════════════════════════
+   CLIENT CARDS
+   ═══════════════════════════════════════════════════════════════ */
+.client-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+}
+
+.client-card:active { transform: scale(0.99); }
+
+.client-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.client-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.client-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.client-sub {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.client-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tag-more {
+  background: var(--bg-3);
+  color: var(--text-3);
+}
+
+.client-chevron {
+  color: var(--text-3);
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ALLERGY CHIPS (formulario cliente)
+   ═══════════════════════════════════════════════════════════════ */
+.allergy-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: item-in 0.15s ease;
+}
+
+.allergy-chip {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+}

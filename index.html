@@ -74,15 +74,34 @@
       <div class="cat-strip" id="cat-wrap"></div>
     </div>
 
-    <div class="recipe-list" id="rlist">
-      <div class="loading-wrap"><div class="spinner"></div></div>
+    <div class="view-body">
+      <div class="recipe-list" id="rlist">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+      <button class="fab" id="fab-add" title="Nueva receta">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
 
-    <button class="fab" id="fab-add" title="Nueva receta">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </button>
+    <nav class="bottom-nav">
+      <button class="bnav-btn bnav-active" onclick="goTo('v-list')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Recetas</span>
+      </button>
+      <button class="bnav-btn" onclick="goToClients()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M17 11c1.657 0 3 1.343 3 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M14.5 5a3 3 0 010 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Clientes</span>
+      </button>
+    </nav>
   </div>
 
 
@@ -256,6 +275,129 @@
           <input id="f-tags" type="text" placeholder="Vegetariano, Sin gluten, Rápido">
           <div class="field-hint">Separadas por coma</div>
         </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: LISTA DE CLIENTES
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-clients">
+
+    <div class="list-header">
+      <div class="list-header-row">
+        <div>
+          <div class="list-greeting">Tu listado</div>
+          <div class="list-title">Mis Clientes</div>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 15 15" fill="none">
+          <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <input id="client-search" type="search" placeholder="Buscar cliente...">
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div class="recipe-list" id="clist">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+      <button class="fab" id="fab-add-client" title="Nuevo cliente">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="bnav-btn" onclick="goTo('v-list')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Recetas</span>
+      </button>
+      <button class="bnav-btn bnav-active" onclick="goToClients()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M17 11c1.657 0 3 1.343 3 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M14.5 5a3 3 0 010 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Clientes</span>
+      </button>
+    </nav>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: FORMULARIO DE CLIENTE
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-client-form">
+
+    <div class="form-header">
+      <span class="form-cancel" id="cf-cancel">Cancelar</span>
+      <span class="form-title"  id="cf-title">Nuevo cliente</span>
+      <button class="form-save" id="cf-save-btn">Guardar</button>
+    </div>
+
+    <div class="form-scroll">
+
+      <!-- ── SECCIÓN: Información ── -->
+      <div class="fsec">
+        <div class="fsec-title">Información</div>
+        <div class="field">
+          <label>Nombre *</label>
+          <input id="cf-name" type="text" placeholder="Nombre del cliente">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Teléfono</label>
+            <input id="cf-phone" type="tel" placeholder="+54 11 ...">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input id="cf-email" type="email" placeholder="correo@...">
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECCIÓN: Alergias ── -->
+      <div class="fsec">
+        <div class="fsec-title">Alergias e intolerancias</div>
+        <div class="item-list" id="allergy-list"></div>
+        <div class="step-add-wrap">
+          <input id="allergy-input" type="text" placeholder="Ej: Gluten, Mariscos..."
+                 class="step-text-input" onkeydown="onAllergyKey(event)">
+          <button class="ing-add-btn" onclick="addAllergy()" type="button">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M7.5 2v11M2 7.5h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="field-hint">Presioná Enter o + para agregar</div>
+      </div>
+
+      <!-- ── SECCIÓN: Preferencias ── -->
+      <div class="fsec">
+        <div class="fsec-title">Preferencias y notas</div>
+        <div class="field">
+          <label>Preferencias alimentarias</label>
+          <textarea id="cf-preferences" placeholder="Vegetariano, le gusta el picante, sin sal..."></textarea>
+        </div>
+        <div class="field">
+          <label>Notas internas</label>
+          <textarea id="cf-notes" placeholder="Notas privadas sobre este cliente..."></textarea>
+        </div>
+      </div>
+
+      <!-- ── Eliminar (solo en edición) ── -->
+      <div class="fsec" id="cf-delete-section" style="display:none">
+        <button class="btn-danger" id="cf-delete-btn">Eliminar cliente</button>
       </div>
 
     </div>

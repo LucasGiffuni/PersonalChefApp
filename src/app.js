@@ -1,4 +1,5 @@
 import { fetchRecipes, upsertRecipe, deleteRecipe, uploadPhoto } from './db.js'
+import { fetchClients, upsertClient, deleteClient } from './clients.js'
 import { logout } from './auth.js'
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -14,6 +15,11 @@ let formIngredients = []
 let formSteps = []
 let selectedUnit = 'g'
 let appInitialized = false
+
+// Clients state
+let clients = []
+let clientEditingId = null
+let formAllergies = []
 
 const CATS = ['Todas', 'Entrada', 'Principal', 'Postre', 'Sopa', 'Otro']
 
@@ -45,6 +51,7 @@ export function initApp() {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 function bindEvents() {
+  // Recipes
   $('search').addEventListener('input', renderList)
   $('fab-add').addEventListener('click', () => openForm())
   $('serv-dec').addEventListener('click', () => changeServ(-1))
@@ -53,7 +60,6 @@ function bindEvents() {
   $('form-cancel').addEventListener('click', () => showView('v-list'))
   $('form-save-btn').addEventListener('click', handleSave)
   $('photo-input').addEventListener('change', onPhotoChange)
-
   document.querySelectorAll('.unit-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.unit-pill').forEach(p => p.classList.remove('active'))
@@ -61,13 +67,29 @@ function bindEvents() {
       selectedUnit = pill.dataset.unit
     })
   })
+
+  // Clients
+  $('client-search').addEventListener('input', renderClientList)
+  $('fab-add-client').addEventListener('click', () => openClientForm())
+  $('cf-cancel').addEventListener('click', () => showView('v-clients'))
+  $('cf-save-btn').addEventListener('click', handleClientSave)
+  $('cf-delete-btn').addEventListener('click', handleClientDelete)
 }
 
 window.handleLogout = async function () {
   await logout()
 }
 
-// ─── List ─────────────────────────────────────────────────────────────────────
+window.goTo = function (id) {
+  showView(id)
+}
+
+window.goToClients = function () {
+  showView('v-clients')
+  initClients()
+}
+
+// ─── Recipes List ─────────────────────────────────────────────────────────────
 async function initList() {
   $('rlist').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>'
   try {
@@ -138,7 +160,8 @@ function renderList() {
 // ─── Detail ───────────────────────────────────────────────────────────────────
 function openDetail(r) {
   curRecipe = r
-  curServ = r.servings || 4
+  baseServ = r.servings || 4
+  curServ = baseServ
 
   const hero = $('d-hero')
   hero.innerHTML = r.photo_url
@@ -235,7 +258,7 @@ async function handleDelete() {
   }
 }
 
-// ─── Form ─────────────────────────────────────────────────────────────────────
+// ─── Recipe Form ──────────────────────────────────────────────────────────────
 function openForm(recipe = null) {
   editingId = recipe?.id || null
   photoFile = null
@@ -254,7 +277,6 @@ function openForm(recipe = null) {
   formIngredients = (recipe?.ingredients || []).map(i => ({ name: i.name || i, qty: i.qty || '' }))
   formSteps = [...(recipe?.steps || [])]
 
-  // Resetear unidad seleccionada
   selectedUnit = 'g'
   document.querySelectorAll('.unit-pill').forEach(p =>
     p.classList.toggle('active', p.dataset.unit === 'g')
@@ -294,7 +316,6 @@ function onPhotoChange(e) {
   renderPhotoArea()
 }
 
-// ─── Form list helpers (expuestas globalmente para los onclick del HTML) ───────
 window.addIng = function () {
   const nameEl = $('ing-input-name')
   const qtyEl  = $('ing-input-qty')
@@ -327,7 +348,6 @@ window.onIngKey = function (e) {
     else window.addIng()
   }
 }
-
 
 window.onStepKey = function (e) {
   if (e.key === 'Enter') { e.preventDefault(); window.addStep() }
@@ -382,7 +402,6 @@ function renderStepList() {
   )
 }
 
-// ─── Save ─────────────────────────────────────────────────────────────────────
 async function handleSave() {
   const name = $('f-name').value.trim()
   if (!name) { toast('Ingresá el nombre del plato', true); return }
@@ -426,5 +445,161 @@ async function handleSave() {
   } finally {
     btn.disabled = false
     btn.textContent = 'Guardar'
+  }
+}
+
+// ─── Clients List ─────────────────────────────────────────────────────────────
+async function initClients() {
+  $('clist').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>'
+  try {
+    clients = await fetchClients()
+  } catch {
+    toast('Error al cargar clientes', true)
+  }
+  renderClientList()
+}
+
+function clientInitials(name) {
+  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
+function renderClientList() {
+  const q = $('client-search').value.toLowerCase().trim()
+  const list = q ? clients.filter(c => c.name.toLowerCase().includes(q)) : clients
+
+  const wrap = $('clist')
+  if (!list.length) {
+    wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">👥</div>
+        <div class="empty-state-text">Sin clientes todavía.<br>Usá el botón + para agregar el primero.</div>
+      </div>`
+    return
+  }
+
+  wrap.innerHTML = list.map(c => {
+    const allergies = c.allergies || []
+    const shown = allergies.slice(0, 3).map(a => `<span class="tag">${a}</span>`).join('')
+    const extra = allergies.length > 3 ? `<span class="tag tag-more">+${allergies.length - 3}</span>` : ''
+    return `
+      <div class="client-card" data-id="${c.id}">
+        <div class="client-avatar">${clientInitials(c.name)}</div>
+        <div class="client-info">
+          <div class="client-name">${c.name}</div>
+          ${c.phone ? `<div class="client-sub">${c.phone}</div>` : (c.email ? `<div class="client-sub">${c.email}</div>` : '')}
+          ${allergies.length ? `<div class="client-tags">${shown}${extra}</div>` : ''}
+        </div>
+        <div class="client-chevron">›</div>
+      </div>`
+  }).join('')
+
+  wrap.querySelectorAll('.client-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const c = clients.find(x => String(x.id) === card.dataset.id)
+      if (c) openClientForm(c)
+    })
+  })
+}
+
+// ─── Client Form ──────────────────────────────────────────────────────────────
+function openClientForm(client = null) {
+  clientEditingId = client?.id || null
+  formAllergies = [...(client?.allergies || [])]
+
+  $('cf-title').textContent = client ? 'Editar cliente' : 'Nuevo cliente'
+  $('cf-name').value        = client?.name || ''
+  $('cf-phone').value       = client?.phone || ''
+  $('cf-email').value       = client?.email || ''
+  $('cf-preferences').value = client?.preferences || ''
+  $('cf-notes').value       = client?.notes || ''
+
+  $('cf-delete-section').style.display = client ? '' : 'none'
+
+  showView('v-client-form')
+  renderAllergyList()
+}
+
+window.addAllergy = function () {
+  const input = $('allergy-input')
+  const val = input.value.trim()
+  if (!val) { input.focus(); return }
+  // allow comma-separated entries
+  val.split(',').map(v => v.trim()).filter(Boolean).forEach(a => formAllergies.push(a))
+  input.value = ''
+  input.focus()
+  renderAllergyList()
+}
+
+window.onAllergyKey = function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); window.addAllergy() }
+}
+
+function renderAllergyList() {
+  const el = $('allergy-list')
+  if (!formAllergies.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:2px 0">Sin alergias registradas</div>'
+    return
+  }
+  el.innerHTML = formAllergies.map((a, i) => `
+    <div class="allergy-chip-row">
+      <span class="allergy-chip">${a}</span>
+      <button class="item-del-btn" data-i="${i}" type="button">×</button>
+    </div>
+  `).join('')
+  el.querySelectorAll('.item-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      formAllergies.splice(parseInt(btn.dataset.i), 1)
+      renderAllergyList()
+    })
+  )
+}
+
+async function handleClientSave() {
+  const name = $('cf-name').value.trim()
+  if (!name) { toast('Ingresá el nombre del cliente', true); return }
+
+  const btn = $('cf-save-btn')
+  btn.disabled = true
+  btn.textContent = 'Guardando...'
+
+  const client = {
+    id:          clientEditingId || undefined,
+    name,
+    phone:       $('cf-phone').value.trim() || null,
+    email:       $('cf-email').value.trim() || null,
+    allergies:   formAllergies,
+    preferences: $('cf-preferences').value.trim() || null,
+    notes:       $('cf-notes').value.trim() || null,
+  }
+
+  try {
+    const saved = await upsertClient(client)
+    const idx = clients.findIndex(c => c.id === saved.id)
+    if (idx >= 0) clients[idx] = { ...clients[idx], ...saved }
+    else clients.push(saved)
+
+    renderClientList()
+    toast(clientEditingId ? 'Cliente actualizado' : 'Cliente guardado')
+    showView('v-clients')
+  } catch (err) {
+    console.error(err)
+    toast('Error al guardar. Revisá la conexión.', true)
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Guardar'
+  }
+}
+
+async function handleClientDelete() {
+  const client = clients.find(c => c.id === clientEditingId)
+  if (!client || !confirm(`¿Eliminar a "${client.name}"?`)) return
+  try {
+    await deleteClient(clientEditingId)
+    clients = clients.filter(c => c.id !== clientEditingId)
+    renderClientList()
+    toast('Cliente eliminado')
+    showView('v-clients')
+  } catch {
+    toast('Error al eliminar', true)
   }
 }

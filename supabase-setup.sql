@@ -64,3 +64,35 @@ create policy "ver_fotos" on storage.objects
 -- 2. Habilitá "Email confirmations" en Authentication → Settings si querés
 --    que los usuarios confirmen su email antes de entrar
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CLIENTES
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists clients (
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz default now(),
+  user_id     uuid references auth.users(id) on delete cascade,
+  name        text not null,
+  phone       text,
+  email       text,
+  allergies   jsonb default '[]',
+  preferences text,
+  notes       text
+);
+
+create index if not exists clients_user_id_idx on clients(user_id);
+
+alter table clients enable row level security;
+
+create policy "ver_propios_clientes" on clients
+  for select using (auth.uid() = user_id);
+
+create policy "insertar_propios_clientes" on clients
+  for insert with check (auth.uid() = user_id);
+
+create policy "editar_propios_clientes" on clients
+  for update using (auth.uid() = user_id);
+
+create policy "borrar_propios_clientes" on clients
+  for delete using (auth.uid() = user_id);
