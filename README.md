@@ -94,6 +94,26 @@ npm run build
 
 Genera la carpeta `dist/` lista para deployar.
 
+### 7. Seed de ingredientes USDA (200 básicos)
+
+Este seed consulta USDA en inglés, prioriza resultados `raw`, traduce/etiqueta en español y guarda en `ingredients_catalog`.
+
+Variables necesarias:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `USDA_API_KEY`
+
+Ejemplo:
+
+```bash
+export SUPABASE_URL="https://TU_PROJECT_REF.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="TU_SERVICE_ROLE_KEY"
+export USDA_API_KEY="TU_USDA_API_KEY"
+export SEED_LIMIT=200
+npm run seed:ingredients
+```
+
 ---
 
 ## Deploy en Vercel

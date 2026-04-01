@@ -15,7 +15,7 @@ create table if not exists recipes (
   time        text,
   difficulty  text        default 'Media',
   servings    int         default 4,
-  ingredients jsonb       default '[]',  -- [{ name: string, qty: string }]
+  ingredients jsonb       default '[]',  -- [{ name: string, grams: number, ingredient_id: number }]
   steps       jsonb       default '[]',  -- [string]
   tags        jsonb       default '[]',  -- [string]
   photo_url   text
@@ -38,6 +38,36 @@ create policy "editar_propias" on recipes
 
 create policy "borrar_propias" on recipes
   for delete using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CATÁLOGO DE INGREDIENTES (cache USDA)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists ingredients_catalog (
+  id                 bigint generated always as identity primary key,
+  name               text not null,
+  display_name       text not null,
+  fdc_id             bigint unique not null,
+  calories_per_100g  double precision default 0,
+  protein_per_100g   double precision default 0,
+  fat_per_100g       double precision default 0,
+  carbs_per_100g     double precision default 0,
+  created_at         timestamptz default now()
+);
+
+create index if not exists ingredients_catalog_name_idx on ingredients_catalog(name);
+create index if not exists ingredients_catalog_name_lower_idx on ingredients_catalog(lower(name));
+
+alter table ingredients_catalog enable row level security;
+
+create policy "ver_ingredientes_catalogo" on ingredients_catalog
+  for select using (auth.uid() is not null);
+
+create policy "insertar_ingredientes_catalogo" on ingredients_catalog
+  for insert with check (auth.uid() is not null);
+
+create policy "editar_ingredientes_catalogo" on ingredients_catalog
+  for update using (auth.uid() is not null);
 
 -- 4. Bucket de fotos (público para leer, restringido para escribir)
 insert into storage.buckets (id, name, public)
@@ -95,4 +125,40 @@ create policy "editar_propios_clientes" on clients
   for update using (auth.uid() = user_id);
 
 create policy "borrar_propios_clientes" on clients
+  for delete using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SERVICIOS (calendario)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists services (
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz default now(),
+  user_id     uuid references auth.users(id) on delete cascade,
+  client_id   bigint references clients(id) on delete set null,
+  date        date not null,
+  time_start  time,
+  time_end    time,
+  location    text,
+  menu_notes  text,
+  status      text default 'pendiente' check (status in ('pendiente', 'confirmado', 'completado', 'cancelado')),
+  price       numeric,
+  notes       text
+);
+
+create index if not exists services_user_id_idx on services(user_id);
+create index if not exists services_date_idx on services(date);
+
+alter table services enable row level security;
+
+create policy "ver_propios_servicios" on services
+  for select using (auth.uid() = user_id);
+
+create policy "insertar_propios_servicios" on services
+  for insert with check (auth.uid() = user_id);
+
+create policy "editar_propios_servicios" on services
+  for update using (auth.uid() = user_id);
+
+create policy "borrar_propios_servicios" on services
   for delete using (auth.uid() = user_id);

@@ -86,13 +86,29 @@
     </div>
 
     <nav class="bottom-nav">
-      <button class="bnav-btn bnav-active" onclick="goTo('v-list')">
+      <button class="bnav-btn bnav-active" data-nav="v-list" onclick="goTo('v-list')">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
           <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
         <span>Recetas</span>
       </button>
-      <button class="bnav-btn" onclick="goToClients()">
+      <button class="bnav-btn" data-nav="v-calendar" onclick="goToCalendar()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <rect x="3" y="4.5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M3 8.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M7 3v3M15 3v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Calendario</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-shopping" onclick="goToShopping()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 5h2l2 10h9l2-7H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="9" cy="18" r="1.4" fill="currentColor"/>
+          <circle cx="16" cy="18" r="1.4" fill="currentColor"/>
+        </svg>
+        <span>Compras</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-clients" onclick="goToClients()">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
           <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
           <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -118,6 +134,7 @@
         <div class="detail-title" id="d-title"></div>
         <div class="detail-desc"  id="d-desc"></div>
         <div class="meta-chips"   id="d-meta"></div>
+        <div class="nutrition-summary" id="d-nutrition" style="display:none"></div>
       </div>
 
       <div class="section">
@@ -141,6 +158,7 @@
       </div>
 
       <div class="section section-last">
+        <button class="btn-primary" id="btn-add-shopping">Agregar a lista de compras</button>
         <button class="btn-danger" id="btn-delete">Eliminar receta</button>
       </div>
 
@@ -223,30 +241,30 @@
         <div class="item-list" id="ing-list"></div>
 
         <div class="ing-add-wrap">
-          <input id="ing-input-name" type="text" placeholder="Nombre del ingrediente"
+          <input id="ing-input-name" type="text" placeholder="Buscar ingrediente (USDA)..."
                  class="ing-name-input" onkeydown="onIngKey(event)">
+          <div class="ingredient-suggest-list" id="ing-suggest" style="display:none"></div>
 
           <div class="ing-qty-row">
-            <input id="ing-input-qty" type="number" placeholder="Cant." min="0" step="any"
+            <input id="ing-input-amount" type="number" placeholder="100" min="0" step="any"
                    class="ing-qty-input" onkeydown="onIngKey(event)">
-            <div class="unit-pills" id="unit-pills">
-              <button class="unit-pill active" data-unit="g"    type="button">g</button>
-              <button class="unit-pill"        data-unit="kg"   type="button">kg</button>
-              <button class="unit-pill"        data-unit="cda"  type="button">cda</button>
-              <button class="unit-pill"        data-unit="cdta" type="button">cdta</button>
-              <button class="unit-pill"        data-unit="L"    type="button">L</button>
-              <button class="unit-pill"        data-unit="mL"   type="button">mL</button>
-              <button class="unit-pill"        data-unit="taza" type="button">taza</button>
-              <button class="unit-pill"        data-unit="u"    type="button">u</button>
-              <button class="unit-pill"        data-unit=""     type="button">—</button>
-            </div>
+            <select id="ing-input-unit" class="ing-unit-select">
+              <option value="g">g</option>
+              <option value="kg">kg</option>
+              <option value="ml">ml</option>
+              <option value="l">L</option>
+              <option value="u">u</option>
+              <option value="cda">cda</option>
+              <option value="cdta">cdta</option>
+              <option value="taza">taza</option>
+            </select>
             <button class="ing-add-btn" onclick="addIng()" type="button">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
                 <path d="M7.5 2v11M2 7.5h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
               </svg>
             </button>
           </div>
-          <div class="field-hint">Enter en el nombre pasa a cantidad · Enter en cantidad agrega</div>
+          <div class="field-hint">Podés usar gramos, volumen o unidades. El sistema convierte a gramos en forma aproximada.</div>
         </div>
       </div>
 
@@ -315,13 +333,29 @@
     </div>
 
     <nav class="bottom-nav">
-      <button class="bnav-btn" onclick="goTo('v-list')">
+      <button class="bnav-btn" data-nav="v-list" onclick="goTo('v-list')">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
           <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
         <span>Recetas</span>
       </button>
-      <button class="bnav-btn bnav-active" onclick="goToClients()">
+      <button class="bnav-btn" data-nav="v-calendar" onclick="goToCalendar()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <rect x="3" y="4.5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M3 8.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M7 3v3M15 3v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Calendario</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-shopping" onclick="goToShopping()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 5h2l2 10h9l2-7H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="9" cy="18" r="1.4" fill="currentColor"/>
+          <circle cx="16" cy="18" r="1.4" fill="currentColor"/>
+        </svg>
+        <span>Compras</span>
+      </button>
+      <button class="bnav-btn bnav-active" data-nav="v-clients" onclick="goToClients()">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
           <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
           <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -331,6 +365,204 @@
         <span>Clientes</span>
       </button>
     </nav>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: CALENDARIO DE SERVICIOS
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-calendar">
+
+    <div class="list-header">
+      <div class="list-header-row">
+        <div>
+          <div class="list-greeting">Planificación</div>
+          <div class="list-title">Servicios</div>
+        </div>
+        <button class="calendar-view-toggle-btn" id="calendar-toggle-view" title="Alternar vista">Lista</button>
+      </div>
+
+      <div class="calendar-month-nav">
+        <button class="icon-btn" id="cal-prev" title="Mes anterior">‹</button>
+        <div class="calendar-month-title" id="cal-month-title"></div>
+        <button class="icon-btn" id="cal-next" title="Mes siguiente">›</button>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div class="recipe-list" id="calendar-content"></div>
+      <button class="fab" id="fab-add-service" title="Nuevo servicio">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="bnav-btn" data-nav="v-list" onclick="goTo('v-list')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Recetas</span>
+      </button>
+      <button class="bnav-btn bnav-active" data-nav="v-calendar" onclick="goToCalendar()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <rect x="3" y="4.5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M3 8.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M7 3v3M15 3v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Calendario</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-shopping" onclick="goToShopping()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 5h2l2 10h9l2-7H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="9" cy="18" r="1.4" fill="currentColor"/>
+          <circle cx="16" cy="18" r="1.4" fill="currentColor"/>
+        </svg>
+        <span>Compras</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-clients" onclick="goToClients()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M17 11c1.657 0 3 1.343 3 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M14.5 5a3 3 0 010 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Clientes</span>
+      </button>
+    </nav>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: LISTA DE COMPRAS
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-shopping">
+    <div class="list-header">
+      <div class="list-header-row">
+        <div>
+          <div class="list-greeting">Planificación</div>
+          <div class="list-title">Lista de Compras</div>
+        </div>
+      </div>
+
+      <div class="shopping-mode-toggle">
+        <button class="shopping-mode-btn active" id="shopping-mode-recipes" type="button">Desde recetas</button>
+        <button class="shopping-mode-btn" id="shopping-mode-manual" type="button">Manual</button>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div class="recipe-list" id="shopping-content"></div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="bnav-btn" data-nav="v-list" onclick="goTo('v-list')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 6h16M3 11h16M3 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Recetas</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-calendar" onclick="goToCalendar()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <rect x="3" y="4.5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M3 8.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M7 3v3M15 3v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Calendario</span>
+      </button>
+      <button class="bnav-btn bnav-active" data-nav="v-shopping" onclick="goToShopping()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M3 5h2l2 10h9l2-7H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="9" cy="18" r="1.4" fill="currentColor"/>
+          <circle cx="16" cy="18" r="1.4" fill="currentColor"/>
+        </svg>
+        <span>Compras</span>
+      </button>
+      <button class="bnav-btn" data-nav="v-clients" onclick="goToClients()">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="9" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 19c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M17 11c1.657 0 3 1.343 3 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M14.5 5a3 3 0 010 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Clientes</span>
+      </button>
+    </nav>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       VISTA: FORMULARIO DE SERVICIO
+  ════════════════════════════════════════════ -->
+  <div class="view" id="v-service-form">
+
+    <div class="form-header">
+      <span class="form-cancel" id="sf-cancel">Cancelar</span>
+      <span class="form-title"  id="sf-title">Nuevo servicio</span>
+      <button class="form-save" id="sf-save-btn">Guardar</button>
+    </div>
+
+    <div class="form-scroll">
+      <div class="fsec">
+        <div class="fsec-title">Cliente y fecha</div>
+        <div class="field">
+          <label>Cliente</label>
+          <select id="sf-client"></select>
+        </div>
+        <div class="field">
+          <label>Fecha</label>
+          <input id="sf-date" type="date">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Hora inicio</label>
+            <input id="sf-time-start" type="time">
+          </div>
+          <div class="field">
+            <label>Hora fin</label>
+            <input id="sf-time-end" type="time">
+          </div>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-title">Operación</div>
+        <div class="field">
+          <label>Ubicación</label>
+          <input id="sf-location" type="text" placeholder="Dirección o referencia">
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <div class="status-pill-wrap" id="sf-status-wrap">
+            <button class="status-pill status-pendiente active" type="button" data-status="pendiente">Pendiente</button>
+            <button class="status-pill status-confirmado" type="button" data-status="confirmado">Confirmado</button>
+            <button class="status-pill status-completado" type="button" data-status="completado">Completado</button>
+            <button class="status-pill status-cancelado" type="button" data-status="cancelado">Cancelado</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-title">Menú y notas</div>
+        <div class="field">
+          <label>Notas del menú</label>
+          <textarea id="sf-menu-notes" placeholder="Descripción libre del menú planificado..."></textarea>
+        </div>
+        <div class="field">
+          <label>Precio</label>
+          <input id="sf-price" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>Notas internas</label>
+          <textarea id="sf-notes" placeholder="Notas privadas del servicio..."></textarea>
+        </div>
+      </div>
+
+      <div class="fsec" id="sf-delete-section" style="display:none">
+        <button class="btn-danger" id="sf-delete-btn">Eliminar servicio</button>
+      </div>
+    </div>
   </div>
 
 
