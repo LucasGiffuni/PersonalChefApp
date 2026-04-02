@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import {
   RecipeForm,
   RecipeFormIngredient,
@@ -97,7 +97,11 @@ export default function EditRecipeScreen() {
   }, [recipeId]);
 
   if (!recipe) {
-    return <View style={{ flex: 1 }} />;
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f2f2f7', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
   }
 
   const onSave = async (value: RecipeFormValue) => {

@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuthStore } from '../../../lib/stores/authStore';
@@ -14,11 +14,7 @@ export default function ChefRecipesScreen() {
   const [activeCategory, setActiveCategory] = useState('Todas');
 
   const load = useCallback(async () => {
-    if (!userId) {
-      setRecipes([]);
-      return;
-    }
-
+    if (!userId) { setRecipes([]); return; }
     try {
       const data = await fetchRecipes(userId);
       setRecipes(data);
@@ -28,9 +24,7 @@ export default function ChefRecipesScreen() {
   }, [userId]);
 
   useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load])
+    useCallback(() => { void load(); }, [load])
   );
 
   const categories = useMemo(() => {
@@ -48,136 +42,255 @@ export default function ChefRecipesScreen() {
   }, [activeCategory, query, recipes]);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.kicker}>Chef</Text>
-        <Text style={styles.title}>Dashboard</Text>
-        <Text style={styles.subtitle}>Tus recetas, categorías y publicación para consumidores.</Text>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={s.safe}>
+        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{recipes.length}</Text>
-              <Text style={styles.statLabel}>Recetas</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{recipes.filter((item) => item.is_published).length}</Text>
-              <Text style={styles.statLabel}>Publicadas</Text>
-            </View>
-          </View>
-          <Pressable style={styles.newButton} onPress={() => router.push('/(chef)/recipes/new')}>
-            <Text style={styles.newButtonText}>Nueva receta</Text>
+          {/* ── Header ── */}
+          <Text style={s.title}>Mis recetas</Text>
+          <Text style={s.subtitle}>
+            {recipes.length} receta{recipes.length !== 1 ? 's' : ''} · {recipes.filter((r) => r.is_published).length} publicada{recipes.filter((r) => r.is_published).length !== 1 ? 's' : ''}
+          </Text>
+
+          {/* ── Botón nueva receta ── */}
+          <Pressable style={s.newButton} onPress={() => router.push('/(chef)/recipes/new')}>
+            <Text style={s.newButtonText}>+ Nueva receta</Text>
           </Pressable>
-        </View>
 
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Buscar recetas"
-          placeholderTextColor="#9CA3AF"
-          style={styles.search}
-        />
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesRow}>
-          {categories.map((category) => {
-            const active = category === activeCategory;
-            return (
-              <Pressable
-                key={category}
-                style={[styles.categoryChip, active ? styles.categoryChipActive : null]}
-                onPress={() => setActiveCategory(category)}
-              >
-                <Text style={[styles.categoryChipText, active ? styles.categoryChipTextActive : null]}>{category}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {!filteredRecipes.length ? (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyEmoji}>🍽️</Text>
-            <Text style={styles.emptyText}>No hay recetas para mostrar.</Text>
+          {/* ── Buscador ── */}
+          <View style={s.searchWrap}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Buscar recetas..."
+              placeholderTextColor="rgba(60,60,67,0.3)"
+              style={s.search}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+            />
           </View>
-        ) : null}
 
-        {filteredRecipes.map((recipe) => (
-          <Pressable key={recipe.id} style={styles.recipeCard} onPress={() => router.push(`/(chef)/recipes/${recipe.id}`)}>
-            {recipe.image_url ? (
-              <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
-            ) : (
-              <View style={styles.recipeImageFallback}>
-                <Text style={styles.recipeEmoji}>🍽️</Text>
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.recipeTitle} numberOfLines={1}>
-                {recipe.title}
+          {/* ── Filtros de categoría ── */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.categoriesRow}
+          >
+            {categories.map((category) => {
+              const active = category === activeCategory;
+              return (
+                <Pressable
+                  key={category}
+                  style={[s.categoryChip, active && s.categoryChipActive]}
+                  onPress={() => setActiveCategory(category)}
+                >
+                  <Text style={[s.categoryChipText, active && s.categoryChipTextActive]}>
+                    {category}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* ── Lista vacía ── */}
+          {filteredRecipes.length === 0 && (
+            <View style={s.emptyWrap}>
+              <Text style={s.emptyEmoji}>🍽️</Text>
+              <Text style={s.emptyTitle}>
+                {query.trim() ? 'Sin resultados' : 'Todavía no tenés recetas'}
               </Text>
-              <Text style={styles.recipeMeta}>{recipe.category}</Text>
-              {recipe.is_published ? (
-                <View style={styles.publishedBadge}>
-                  <Text style={styles.publishedBadgeText}>Publicada</Text>
-                </View>
-              ) : null}
+              <Text style={s.emptySubtitle}>
+                {query.trim() ? 'Probá con otro nombre o categoría.' : 'Creá tu primera receta con el botón de arriba.'}
+              </Text>
             </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
+          )}
+
+          {/* ── Cards de recetas ── */}
+          {filteredRecipes.map((recipe) => (
+            <Pressable
+              key={recipe.id}
+              style={s.recipeCard}
+              onPress={() => router.push(`/(chef)/recipes/${recipe.id}`)}
+            >
+              {recipe.image_url ? (
+                <Image source={{ uri: recipe.image_url }} style={s.recipeImage} />
+              ) : (
+                <View style={s.recipeImageFallback}>
+                  <Text style={s.recipeEmoji}>🍽️</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={s.recipeTitle} numberOfLines={1}>{recipe.title}</Text>
+                {recipe.category ? <Text style={s.recipeMeta}>{recipe.category}</Text> : null}
+                {recipe.is_published && (
+                  <View style={s.publishedBadge}>
+                    <Text style={s.publishedBadgeText}>Publicada</Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          ))}
+
+        </ScrollView>
+      </SafeAreaView>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F2F2F7' },
-  content: { paddingHorizontal: 16, paddingBottom: 120, paddingTop: 10 },
-  kicker: { fontSize: 12, fontWeight: '700', color: '#007AFF', textTransform: 'uppercase', letterSpacing: 0.6 },
-  title: { marginTop: 6, fontSize: 34, fontWeight: '700', color: '#111111' },
-  subtitle: { marginTop: 4, fontSize: 14, color: '#6B7280' },
-  statsCard: { marginTop: 14, marginBottom: 12, borderRadius: 14, backgroundColor: '#FFFFFF', padding: 14 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  statItem: { flex: 1 },
-  statValue: { fontSize: 22, fontWeight: '700', color: '#111111' },
-  statLabel: { marginTop: 2, fontSize: 12, color: '#6B7280' },
+const s = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f2f2f7',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+    paddingTop: 10,
+  },
+
+  // Header
+  title: {
+    marginTop: 8,
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: 0.4,
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: 'rgba(60,60,67,0.6)',
+  },
+
+  // Botón nueva receta
   newButton: {
-    marginTop: 12,
+    marginTop: 16,
     backgroundColor: '#007AFF',
-    minHeight: 44,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    minHeight: 50,
+    borderRadius: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  newButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-  search: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+  newButtonText: {
+    color: '#ffffff',
     fontSize: 16,
-    color: '#111111',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  categoriesRow: { gap: 8, marginTop: 10, paddingRight: 10 },
-  categoryChip: { minHeight: 36, borderRadius: 999, backgroundColor: '#FFFFFF', paddingHorizontal: 12, justifyContent: 'center' },
-  categoryChipActive: { backgroundColor: '#007AFF' },
-  categoryChipText: { color: '#374151', fontWeight: '600' },
-  categoryChipTextActive: { color: '#FFFFFF' },
+
+  // Buscador
+  searchWrap: {
+    marginTop: 14,
+  },
+  search: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#000000',
+  },
+
+  // Filtros de categoría
+  categoriesRow: {
+    gap: 8,
+    marginTop: 12,
+    paddingRight: 4,
+  },
+  categoryChip: {
+    minHeight: 34,
+    borderRadius: 999,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(60,60,67,0.29)',
+  },
+  categoryChipActive: {
+    backgroundColor: '#007AFF',
+    borderWidth: 0,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000000',
+  },
+  categoryChipTextActive: {
+    color: '#ffffff',
+  },
+
+  // Estado vacío
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyEmoji: {
+    fontSize: 40,
+  },
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: 'rgba(60,60,67,0.6)',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+
+  // Cards de recetas
   recipeCard: {
     marginTop: 10,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  recipeImage: { width: 64, height: 64, borderRadius: 10 },
-  recipeImageFallback: { width: 64, height: 64, borderRadius: 10, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
-  recipeEmoji: { fontSize: 28 },
-  recipeTitle: { color: '#111111', fontSize: 16, fontWeight: '700' },
-  recipeMeta: { marginTop: 3, color: '#6B7280', fontSize: 12 },
-  publishedBadge: { marginTop: 6, alignSelf: 'flex-start', borderRadius: 10, backgroundColor: 'rgba(52,199,89,0.15)', minHeight: 20, paddingHorizontal: 8, justifyContent: 'center' },
-  publishedBadgeText: { color: '#34C759', fontSize: 11, fontWeight: '700' },
-  emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28 },
-  emptyEmoji: { fontSize: 34 },
-  emptyText: { marginTop: 8, fontSize: 14, color: '#6B7280' },
+  recipeImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+  },
+  recipeImageFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: '#f2f2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeEmoji: {
+    fontSize: 28,
+  },
+  recipeTitle: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  recipeMeta: {
+    marginTop: 3,
+    color: 'rgba(60,60,67,0.6)',
+    fontSize: 13,
+  },
+  publishedBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    backgroundColor: 'rgba(52,199,89,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  publishedBadgeText: {
+    color: '#34C759',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });

@@ -2,11 +2,9 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
 import React, {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
@@ -19,13 +17,13 @@ import {
   Modal,
   Platform,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -105,26 +103,23 @@ const DIFFICULTY_OPTIONS: Array<{ key: Difficulty; label: string; color: string 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
 function useColors() {
-  const scheme = useColorScheme();
-  const dark = scheme === 'dark';
   return useMemo(
     () => ({
-      groupedBg: dark ? '#1c1c1e' : '#f2f2f7',
-      cardBg: dark ? '#2c2c2e' : '#ffffff',
-      label: dark ? '#ffffff' : '#000000',
-      secondaryLabel: dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)',
-      tertiaryLabel: dark ? 'rgba(235,235,245,0.3)' : 'rgba(60,60,67,0.3)',
-      separator: dark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)',
-      tertiaryGroupedBg: dark ? '#3a3a3c' : '#f2f2f7',
-      secondaryGroupedBg: dark ? '#2c2c2e' : '#f2f2f7',
-      blurTint: (dark ? 'dark' : 'light') as 'dark' | 'light',
+      groupedBg: '#f2f2f7',
+      cardBg: '#ffffff',
+      label: '#000000',
+      secondaryLabel: 'rgba(60,60,67,0.6)',
+      tertiaryLabel: 'rgba(60,60,67,0.3)',
+      separator: 'rgba(60,60,67,0.29)',
+      tertiaryGroupedBg: '#f2f2f7',
+      secondaryGroupedBg: '#f2f2f7',
       systemBlue: '#007AFF',
       systemGreen: '#34C759',
       systemOrange: '#FF9500',
       systemRed: '#FF3B30',
       systemGray: '#8E8E93',
     }),
-    [dark]
+    []
   );
 }
 
@@ -182,7 +177,7 @@ function IngredientSearchModal({
         .map((item) => ({
           id: `catalog-${item.id}`,
           label: item.display_name || item.name,
-          source: 'catalog',
+          source: 'catalog' as const,
           catalogId: String(item.id),
           caloriesPer100g: Number(item.calories_per_100g ?? 0),
           proteinPer100g: Number(item.protein_per_100g ?? 0),
@@ -196,7 +191,7 @@ function IngredientSearchModal({
         const merged = [...localHits];
         usdaHits.slice(0, 5).forEach((item) => {
           if (!merged.some((e) => e.label.toLowerCase() === item.description.toLowerCase())) {
-            merged.push({ id: `usda-${item.fdcId}`, label: item.description, source: 'usda', fdcId: item.fdcId });
+            merged.push({ id: `usda-${item.fdcId}`, label: item.description, source: 'usda' as const, fdcId: item.fdcId });
           }
         });
         setSuggestions(merged);
@@ -290,7 +285,7 @@ function IngredientSearchModal({
                         selectedSuggestion?.id === item.id && { backgroundColor: colors.tertiaryGroupedBg },
                       ]}
                     >
-                      <Text style={[{ flex: 1, fontSize: 15, color: colors.label }]} numberOfLines={1}>{item.label}</Text>
+                      <Text style={{ flex: 1, fontSize: 15, color: colors.label }} numberOfLines={1}>{item.label}</Text>
                       <Text style={{ fontSize: 11, fontWeight: '700', color: item.source === 'catalog' ? colors.systemGreen : colors.systemBlue }}>
                         {item.source === 'catalog' ? 'Catálogo' : 'USDA'}
                       </Text>
@@ -437,8 +432,8 @@ function AddStepModal({
 
 export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
   const colors = useColors();
-  const navigation = useNavigation();
-  const title = initialValues ? 'Editar receta' : 'Nueva receta';
+  const isEdit = initialValues != null;
+  const title = isEdit ? 'Editar receta' : 'Nueva receta';
 
   const [name, setName] = useState(initialValues?.name ?? '');
   const [time, setTime] = useState(initialValues?.time ?? '');
@@ -517,29 +512,6 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
     }
   }, [canSave, isSaving, onSave, name, cat, description, time, difficulty, servings, photoUrl, photoUri, isPublished, ingredients, steps]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: true,
-      title,
-      headerBlurEffect: 'systemMaterial',
-      headerTransparent: Platform.OS === 'ios',
-      headerTitleStyle: { color: colors.label },
-      headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.cardBg },
-      headerLeft: () => (
-        <Pressable onPress={handleCancel} hitSlop={8}>
-          <Text style={{ color: colors.systemBlue, fontSize: 17 }}>Cancelar</Text>
-        </Pressable>
-      ),
-      headerRight: () => (
-        <Pressable onPress={() => void handleSave()} disabled={!canSave || isSaving} hitSlop={8}>
-          <Text style={{ color: canSave && !isSaving ? colors.systemBlue : colors.systemGray, fontSize: 17, fontWeight: '600' }}>
-            {isSaving ? 'Guardando…' : 'Guardar'}
-          </Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation, title, handleCancel, handleSave, canSave, isSaving, colors]);
-
   const openPhotoPicker = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -615,17 +587,29 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
 
   return (
     <>
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.groupedBg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-      >
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={s.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          contentInsetAdjustmentBehavior="automatic"
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.groupedBg }}>
+        <View style={[s.inlineActions, { borderBottomColor: colors.separator, backgroundColor: colors.groupedBg }]}>
+          <Pressable onPress={handleCancel} hitSlop={8}>
+            <Text style={{ color: colors.systemBlue, fontSize: 17 }}>Cancelar</Text>
+          </Pressable>
+          <Text style={[s.inlineActionsTitle, { color: colors.label }]}>{title}</Text>
+          <Pressable onPress={() => void handleSave()} disabled={!canSave || isSaving} hitSlop={8}>
+            <Text style={{ color: canSave && !isSaving ? colors.systemBlue : colors.systemGray, fontSize: 17, fontWeight: '600' }}>
+              {isSaving ? 'Guardando…' : 'Guardar'}
+            </Text>
+          </Pressable>
+        </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: colors.groupedBg }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
         >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={s.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            contentInsetAdjustmentBehavior="automatic"
+          >
 
           {/* ── 1: Foto hero ── */}
           <TouchableOpacity
@@ -636,9 +620,9 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
             {displayPhoto ? (
               <>
                 <Image source={{ uri: displayPhoto }} style={s.photoImage} />
-                <BlurView intensity={60} tint={colors.blurTint} style={s.photoOverlay}>
-                  <Ionicons name="camera-outline" size={16} color={colors.label} />
-                  <Text style={[s.photoOverlayText, { color: colors.label }]}>Cambiar</Text>
+                <BlurView intensity={60} tint="systemMaterial" style={s.photoOverlay}>
+                  <Ionicons name="camera-outline" size={16} color="#000000" />
+                  <Text style={s.photoOverlayText}>Cambiar</Text>
                 </BlurView>
               </>
             ) : (
@@ -662,7 +646,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
                 placeholderTextColor={colors.tertiaryLabel}
                 style={[s.rowInputRight, { color: colors.label }]}
                 returnKeyType="next"
-                autoFocus={!initialValues?.name}
+                autoFocus={!isEdit}
               />
             </View>
             <View style={[s.row, rowSep(colors.separator)]}>
@@ -911,9 +895,9 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
             </View>
           </View>
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
       <DescriptionModal
         visible={showDescriptionModal}
@@ -948,6 +932,18 @@ export default function RecipeFormRoute() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  inlineActions: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  inlineActionsTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
   scrollContent: {
     paddingBottom: 40,
   },
@@ -982,6 +978,7 @@ const s = StyleSheet.create({
   photoOverlayText: {
     fontSize: 11,
     fontWeight: '500',
+    color: '#000000',
   },
   photoPlaceholder: {
     alignItems: 'center',
@@ -990,10 +987,11 @@ const s = StyleSheet.create({
   photoPlaceholderMain: {
     fontSize: 14,
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 8,
   },
   photoPlaceholderSub: {
     fontSize: 12,
+    marginTop: 4,
   },
 
   // Sections
@@ -1055,7 +1053,7 @@ const s = StyleSheet.create({
   chip: {
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },

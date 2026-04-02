@@ -1,8 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { RecipeForm, RecipeFormData, RecipeFormIngredient } from './_form';
 import { supabase } from '../../../lib/supabase';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type RecipeEditData = {
   id: number;
@@ -18,6 +20,13 @@ type RecipeEditData = {
   steps: string[] | null;
   is_published: boolean | null;
 };
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BG = '#f2f2f7';
+const BLUE = '#007AFF';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function uploadPhoto(uri: string, recipeId: number): Promise<string | null> {
   try {
@@ -38,33 +47,22 @@ async function uploadPhoto(uri: string, recipeId: number): Promise<string | null
 
 function normalizeDifficulty(value: string | null): RecipeFormData['difficulty'] {
   const v = String(value ?? '').toLowerCase();
-  if (v === 'easy' || v === 'facil' || v === 'fácil') return 'easy';
-  if (v === 'hard' || v === 'dificil' || v === 'difícil') return 'hard';
+  if (v === 'easy' || v === 'facil' || v === 'fácil' || v === 'baja') return 'easy';
+  if (v === 'hard' || v === 'dificil' || v === 'difícil' || v === 'alta') return 'hard';
   return 'medium';
 }
 
 function normalizeIngredients(input: any[] | null): RecipeFormIngredient[] {
   if (!Array.isArray(input)) return [];
-
   return input
     .map((item, index) => {
       if (typeof item === 'string') {
         const name = item.trim();
         if (!name) return null;
-
-        return {
-          id: `legacy-${index}`,
-          name,
-          source: 'manual' as const,
-          quantity: 0,
-          unit: 'g' as const,
-          grams: 0,
-        };
+        return { id: `legacy-${index}`, name, source: 'manual' as const, quantity: 0, unit: 'g' as const, grams: 0 };
       }
-
       const name = String(item?.name ?? '').trim();
       if (!name) return null;
-
       return {
         id: String(item?.id ?? `legacy-${index}`),
         name,
@@ -88,48 +86,54 @@ function normalizeIngredients(input: any[] | null): RecipeFormIngredient[] {
     .filter(Boolean) as RecipeFormIngredient[];
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function EditRecipeScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const recipeId = Number(id);
-  const colorScheme = useColorScheme();
 
   const [recipe, setRecipe] = useState<RecipeEditData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const onCancel = () => router.back();
+
   useEffect(() => {
     let active = true;
-
     const load = async () => {
+      console.log('[EDIT] load → recipeId:', recipeId);
       if (!Number.isFinite(recipeId) || recipeId <= 0) {
-        if (active) {
-          setRecipe(null);
-          setLoading(false);
-        }
+        console.warn('[EDIT] load → invalid recipeId, aborting');
+        if (active) { setRecipe(null); setLoading(false); }
         return;
       }
-
-      const { data } = await supabase
-        .from('recipes')
-        .select('id,name,cat,emoji,description,time,difficulty,servings,photo_url,ingredients,steps,is_published')
-        .eq('id', recipeId)
-        .maybeSingle();
-
-      if (!active) return;
-      setRecipe((data as RecipeEditData) ?? null);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase
+          .from('recipes')
+          .select('id,name,cat,emoji,description,time,difficulty,servings,photo_url,ingredients,steps,is_published')
+          .eq('id', recipeId)
+          .maybeSingle();
+        if (!active) return;
+        if (error) {
+          console.warn('[EDIT] load → supabase error:', error.message);
+          setRecipe(null);
+        } else {
+          console.log('[EDIT] load → got recipe:', data ? `id=${(data as any).id}` : 'null');
+          setRecipe((data as RecipeEditData) ?? null);
+        }
+      } catch (err: any) {
+        console.error('[EDIT] load → unexpected error:', err?.message ?? err);
+        if (active) setRecipe(null);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
-
     void load();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [recipeId]);
 
   const initialValues = useMemo<Partial<RecipeFormData> | undefined>(() => {
     if (!recipe) return undefined;
-
     return {
       name: recipe.name,
       cat: recipe.cat ?? 'Principal',
@@ -146,18 +150,15 @@ export default function EditRecipeScreen() {
   }, [recipe]);
 
   const onSave = async (value: RecipeFormData) => {
-    if (!recipe) {
-      throw new Error('No se encontró la receta para actualizar.');
-    }
+    if (!recipe) throw new Error('No se encontró la receta para actualizar.');
 
     let finalPhotoUrl = value.photo_url || null;
-
     if (value.photoUri) {
       const uploaded = await uploadPhoto(value.photoUri, recipe.id);
       if (uploaded) finalPhotoUrl = uploaded;
     }
 
-    const payload = {
+    const { error } = await supabase.from('recipes').update({
       name: value.name,
       cat: value.cat || null,
       emoji: value.emoji,
@@ -183,9 +184,8 @@ export default function EditRecipeScreen() {
       })),
       steps: value.steps,
       is_published: value.is_published,
-    };
+    }).eq('id', recipe.id);
 
-    const { error } = await supabase.from('recipes').update(payload).eq('id', recipe.id);
     if (error) {
       Alert.alert('No se pudo actualizar', error.message);
       throw error;
@@ -194,43 +194,32 @@ export default function EditRecipeScreen() {
     router.replace('/(chef)/recipes');
   };
 
-  const onCancel = () => router.back();
-
-  if (!loading && !recipe) {
+  // ── Estado: cargando ──
+  if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colorScheme === 'dark' ? '#1c1c1e' : '#f2f2f7',
-          paddingHorizontal: 24,
-        }}
-      >
-        <Text style={{ color: colorScheme === 'dark' ? '#ffffff' : '#000000', fontSize: 16, fontWeight: '600' }}>
-          Receta no encontrada
-        </Text>
-        <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
-          <Text style={{ color: '#007AFF', fontSize: 16 }}>Volver</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
+        <Pressable onPress={onCancel} style={{ position: 'absolute', top: 20, left: 16 }} hitSlop={8}>
+          <Text style={{ color: BLUE, fontSize: 17 }}>Volver</Text>
+        </Pressable>
+        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={BLUE} />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Estado: no encontrada ──
+  if (!recipe || !initialValues) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG, paddingHorizontal: 24 }}>
+        <Text style={{ color: '#000000', fontSize: 16, fontWeight: '600' }}>Receta no encontrada</Text>
+        <Pressable onPress={onCancel} style={{ marginTop: 12 }}>
+          <Text style={{ color: BLUE, fontSize: 16 }}>Volver</Text>
         </Pressable>
       </View>
     );
   }
 
-  if (loading || !initialValues) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colorScheme === 'dark' ? '#1c1c1e' : '#f2f2f7',
-        }}
-      >
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
-
+  // ── Estado: formulario ──
   return <RecipeForm initialValues={initialValues} onSave={onSave} onCancel={onCancel} />;
 }

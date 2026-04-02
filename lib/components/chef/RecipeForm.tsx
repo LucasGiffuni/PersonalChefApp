@@ -1,11 +1,9 @@
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
 import React, {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
@@ -18,13 +16,13 @@ import {
   Modal,
   Platform,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -104,26 +102,24 @@ const DIFFICULTY_OPTIONS: Array<{ key: Difficulty; label: string; color: string 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
 function useColors() {
-  const scheme = useColorScheme();
-  const dark = scheme === 'dark';
   return useMemo(
     () => ({
-      groupedBg: dark ? '#1c1c1e' : '#f2f2f7',
-      cardBg: dark ? '#2c2c2e' : '#ffffff',
-      label: dark ? '#ffffff' : '#000000',
-      secondaryLabel: dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)',
-      tertiaryLabel: dark ? 'rgba(235,235,245,0.3)' : 'rgba(60,60,67,0.3)',
-      separator: dark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)',
-      tertiaryGroupedBg: dark ? '#3a3a3c' : '#f2f2f7',
-      secondaryGroupedBg: dark ? '#2c2c2e' : '#f2f2f7',
-      blurTint: (dark ? 'dark' : 'light') as 'dark' | 'light',
+      groupedBg: '#f2f2f7',
+      cardBg: '#ffffff',
+      label: '#000000',
+      secondaryLabel: 'rgba(60,60,67,0.6)',
+      tertiaryLabel: 'rgba(60,60,67,0.3)',
+      separator: 'rgba(60,60,67,0.29)',
+      tertiaryGroupedBg: '#f2f2f7',
+      secondaryGroupedBg: '#f2f2f7',
+      blurTint: 'light' as const,
       systemBlue: '#007AFF',
       systemGreen: '#34C759',
       systemOrange: '#FF9500',
       systemRed: '#FF3B30',
       systemGray: '#8E8E93',
     }),
-    [dark]
+    []
   );
 }
 
@@ -436,7 +432,6 @@ function AddStepModal({
 
 export function RecipeForm({ title, initialValue, onSave, onCancel }: Props) {
   const colors = useColors();
-  const navigation = useNavigation();
 
   const [name, setName] = useState(initialValue?.name ?? '');
   const [time, setTime] = useState(initialValue?.time ?? '');
@@ -514,29 +509,6 @@ export function RecipeForm({ title, initialValue, onSave, onCancel }: Props) {
       setIsSaving(false);
     }
   }, [canSave, isSaving, onSave, name, cat, description, time, difficulty, servings, photoUrl, photoUri, isPublished, ingredients, steps]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: true,
-      title,
-      headerBlurEffect: 'systemMaterial',
-      headerTransparent: Platform.OS === 'ios',
-      headerTitleStyle: { color: colors.label },
-      headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.cardBg },
-      headerLeft: () => (
-        <Pressable onPress={handleCancel} hitSlop={8}>
-          <Text style={{ color: colors.systemBlue, fontSize: 17 }}>Cancelar</Text>
-        </Pressable>
-      ),
-      headerRight: () => (
-        <Pressable onPress={() => void handleSave()} disabled={!canSave || isSaving} hitSlop={8}>
-          <Text style={{ color: canSave && !isSaving ? colors.systemBlue : colors.systemGray, fontSize: 17, fontWeight: '600' }}>
-            {isSaving ? 'Guardando…' : 'Guardar'}
-          </Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation, title, handleCancel, handleSave, canSave, isSaving, colors]);
 
   const openPhotoPicker = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -629,17 +601,29 @@ export function RecipeForm({ title, initialValue, onSave, onCancel }: Props) {
 
   return (
     <>
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.groupedBg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-      >
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={s.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          contentInsetAdjustmentBehavior="automatic"
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.groupedBg }}>
+        <View style={[s.inlineActions, { borderBottomColor: colors.separator, backgroundColor: colors.groupedBg }]}>
+          <Pressable onPress={handleCancel} hitSlop={8}>
+            <Text style={{ color: colors.systemBlue, fontSize: 17 }}>Cancelar</Text>
+          </Pressable>
+          <Text style={[s.inlineActionsTitle, { color: colors.label }]}>{title}</Text>
+          <Pressable onPress={() => void handleSave()} disabled={!canSave || isSaving} hitSlop={8}>
+            <Text style={{ color: canSave && !isSaving ? colors.systemBlue : colors.systemGray, fontSize: 17, fontWeight: '600' }}>
+              {isSaving ? 'Guardando…' : 'Guardar'}
+            </Text>
+          </Pressable>
+        </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: colors.groupedBg }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
         >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={s.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            contentInsetAdjustmentBehavior="automatic"
+          >
 
           {/* ── 1: Foto hero ── */}
           <TouchableOpacity
@@ -925,8 +909,9 @@ export function RecipeForm({ title, initialValue, onSave, onCancel }: Props) {
           </View>
 
           <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
       <DescriptionModal
         visible={showDescriptionModal}
@@ -957,6 +942,18 @@ export function RecipeForm({ title, initialValue, onSave, onCancel }: Props) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  inlineActions: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  inlineActionsTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
   scrollContent: {
     paddingBottom: 40,
   },

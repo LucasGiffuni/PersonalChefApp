@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { supabase } from '../supabase';
 import { generateCode } from '../utils/inviteCode';
@@ -28,19 +27,6 @@ type InviteStore = {
   validateCode: (code: string) => Promise<ValidateCodeResult>;
   redeemCode: (code: string, userId: string) => Promise<string>;
 };
-
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-const anonSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      })
-    : null;
 
 export const useInviteStore = create<InviteStore>((set, get) => ({
   codes: [],
@@ -113,12 +99,10 @@ export const useInviteStore = create<InviteStore>((set, get) => ({
   },
 
   validateCode: async (code: string) => {
-    if (!anonSupabase) throw new Error('Supabase no está configurado');
-
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) return { valid: false, chefName: null, chefId: null };
 
-    const { data, error } = await anonSupabase
+    const { data, error } = await supabase
       .from('invite_codes')
       .select('chef_id,max_uses,uses_count,expires_at')
       .eq('code', cleanCode)

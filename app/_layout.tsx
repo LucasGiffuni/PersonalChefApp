@@ -28,11 +28,30 @@ export default function RootLayout() {
   }, [initialize]);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      useAuthStore.setState({ session: nextSession, role: null });
-      if (nextSession?.user?.id) {
-        await fetchRole();
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const currentState = useAuthStore.getState();
+      const prevUserId = currentState.session?.user?.id ?? null;
+      const nextUserId = nextSession?.user?.id ?? null;
+      const userChanged = prevUserId !== nextUserId;
+
+      console.log('[NAV] onAuthStateChange → event:', event, 'userId:', nextUserId ?? 'null');
+
+      if (!nextUserId) {
+        useAuthStore.setState({ session: null, role: null, isLoading: false });
+        return;
       }
+
+      useAuthStore.setState({
+        session: nextSession,
+        role: userChanged ? null : currentState.role,
+      });
+
+      if (userChanged || !currentState.role) {
+        void fetchRole();
+        return;
+      }
+
+      useAuthStore.setState({ isLoading: false });
     });
 
     return () => listener.subscription.unsubscribe();
@@ -72,26 +91,33 @@ export default function RootLayout() {
   const inInviteRoute = segments[0] === 'invite';
 
   useEffect(() => {
+    console.log('[NAV] guard → isLoading:', isLoading, '| session:', !!session, '| role:', role, '| seg:', segments[0]);
     if (isLoading) return;
 
     if (!session) {
       if (!inAuthGroup && !inInviteRoute) {
+        console.log('[NAV] → replace /login');
         router.replace('/login');
       }
       return;
     }
 
-    if (!role) return;
+    if (!role) {
+      console.log('[NAV] → waiting for role…');
+      return;
+    }
 
     if (role === 'chef' && !inChefGroup) {
+      console.log('[NAV] → replace /(chef)/recipes');
       router.replace('/(chef)/recipes');
       return;
     }
 
     if (role === 'consumer' && !inConsumerGroup) {
+      console.log('[NAV] → replace /(consumer)/menu');
       router.replace('/(consumer)/menu');
     }
-  }, [inAuthGroup, inChefGroup, inConsumerGroup, inInviteRoute, isLoading, role, router, session]);
+  }, [inAuthGroup, inChefGroup, inConsumerGroup, inInviteRoute, isLoading, role, router, session, segments]);
 
   if (isLoading) {
     return (
