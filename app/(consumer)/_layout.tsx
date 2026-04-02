@@ -2,16 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import React, { useEffect } from 'react';
-import { Platform, PlatformColor, StyleSheet, useColorScheme } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { useAuthStore } from '../../lib/stores/authStore';
 import { useConsumerStore } from '../../lib/stores/consumerStore';
-
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
-}
+import { useTheme } from '../../lib/theme';
 
 export default function ConsumerLayout() {
-  const isDark = useColorScheme() === 'dark';
+  const { scheme, colors } = useTheme();
   const session = useAuthStore((s) => s.session);
   const initialize = useConsumerStore((s) => s.initialize);
   const clear = useConsumerStore((s) => s.clear);
@@ -29,15 +26,25 @@ export default function ConsumerLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: iosColor('systemBlue', '#007AFF'),
-        tabBarInactiveTintColor: iosColor('secondaryLabel', '#8E8E93'),
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.secondaryLabel,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? -2 : 2,
+        },
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 0,
           backgroundColor: 'transparent',
+          elevation: 0,
         },
         tabBarBackground: () => (
-          <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          <BlurView
+            intensity={88}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={[StyleSheet.absoluteFill, styles.tabBarBackground, { borderTopColor: colors.tabBarBorder }]}
+          />
         ),
       }}
     >
@@ -65,3 +72,9 @@ export default function ConsumerLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarBackground: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+});

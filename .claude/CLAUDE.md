@@ -34,16 +34,16 @@ El cliente Supabase (`lib/supabase.ts`) usa `AsyncStorage` para persistir sesió
 ├── scripts/
 │   └── seed-ingredients-catalog.mjs
 ├── assets/
-├── lib/                      # Lógica central (reemplaza al antiguo src/)
+├── lib/                      # Lógica central
 │   ├── supabase.ts           # Cliente Supabase con AsyncStorage
 │   ├── stores/               # Zustand stores
 │   │   ├── authStore.ts
 │   │   ├── chefDashboardStore.ts
 │   │   ├── consumerStore.ts
 │   │   └── inviteStore.ts
-│   ├── components/           # UI reutilizable
+│   ├── components/           # UI reutilizable (legacy — formulario activo está en app/)
 │   │   ├── chef/
-│   │   │   └── RecipeForm.tsx    # Formulario de receta (nuevo/editar)
+│   │   │   └── RecipeForm.tsx    # LEGACY: reemplazado por app/(chef)/recipes/_form.tsx
 │   │   ├── CategoryFilter.tsx
 │   │   ├── InputField.tsx
 │   │   ├── IOSCard.tsx
@@ -87,12 +87,13 @@ El cliente Supabase (`lib/supabase.ts`) usa `AsyncStorage` para persistir sesió
     │   ├── invite.tsx        # Tab oculto: gestión de códigos de invitación
     │   ├── profile.tsx
     │   ├── recipes/          # CRUD de recetas
-    │   │   ├── _layout.tsx
+    │   │   ├── _layout.tsx   # <Stack screenOptions={{ headerShown: false }}> — cada pantalla gestiona su propio header
     │   │   ├── index.tsx     # Lista de recetas
-    │   │   ├── new.tsx       # Nueva receta
-    │   │   ├── [id].tsx      # Detalle de receta (con nutrición inline)
+    │   │   ├── new.tsx       # Nueva receta (usa RecipeForm de _form.tsx)
+    │   │   ├── _form.tsx     # Formulario compartido (crear + editar). Gestiona su propio <Stack.Screen>
+    │   │   ├── [id].tsx      # EDITAR receta (no es un detalle — navega desde index con router.push)
     │   │   └── edit/
-    │   │       └── [id].tsx  # Editar receta
+    │   │       └── [id].tsx  # Re-export de [id].tsx — mantiene compatibilidad de URL antigua
     │   └── calendar/         # Calendario de servicios
     │       ├── _layout.tsx
     │       ├── index.tsx
@@ -113,12 +114,39 @@ El cliente Supabase (`lib/supabase.ts`) usa `AsyncStorage` para persistir sesió
 
 ### Flujo de autenticación y roles (`app/_layout.tsx`)
 1. `initialize()` — obtiene sesión activa y llama `fetchRole()`
-2. `onAuthStateChange` — reacciona a login/logout, re-fetcha el rol
+2. `onAuthStateChange` — reacciona a login/logout; evita llamadas redundantes a `fetchRole()` cuando el usuario no cambió (e.g. token refresh)
 3. Redirect por rol:
    - Sin sesión → `/login`
    - `role = 'chef'` → `/(chef)/recipes`
    - `role = 'consumer'` → `/(consumer)/menu`
 4. Deep link de invitación: `chefapp://invite/[CODE]` → si no hay sesión, guarda el código en `SecureStore` y redirige a `/invite-register`
+
+### `onAuthStateChange` — lógica de rol preservado
+```tsx
+supabase.auth.onAuthStateChange((event, nextSession) => {
+  const currentState = useAuthStore.getState();
+  const prevUserId = currentState.session?.user?.id ?? null;
+  const nextUserId = nextSession?.user?.id ?? null;
+  const userChanged = prevUserId !== nextUserId;
+
+  if (!nextUserId) {
+    useAuthStore.setState({ session: null, role: null, isLoading: false });
+    return;
+  }
+
+  useAuthStore.setState({
+    session: nextSession,
+    role: userChanged ? null : currentState.role, // preserva rol si es el mismo usuario
+  });
+
+  if (userChanged || !currentState.role) {
+    void fetchRole(); // solo fetcha si el usuario cambió o no hay rol
+    return;
+  }
+
+  useAuthStore.setState({ isLoading: false }); // token refresh → no hace nada extra
+});
+```
 
 ### Stores Zustand
 
@@ -127,11 +155,12 @@ El cliente Supabase (`lib/supabase.ts`) usa `AsyncStorage` para persistir sesió
 session: Session | null
 role: 'chef' | 'consumer' | null
 isLoading: boolean
-initialize()   // getSession + fetchRole
-fetchRole()    // SELECT role FROM user_roles WHERE user_id = uid
+initialize()   // getSession + fetchRole — con try/catch/finally; isLoading: false garantizado
+fetchRole()    // SELECT role FROM user_roles WHERE user_id = uid — con try/catch/finally
 signOut()
 setSession() / setRole()
 ```
+Todos los métodos tienen `try/catch/finally` para garantizar que `isLoading` siempre vuelve a `false`, incluso si Supabase lanza un error. Logs con prefijo `[AUTH]`.
 
 **`consumerStore`** (`lib/stores/consumerStore.ts`)
 ```ts
@@ -184,7 +213,7 @@ description text
 time        text
 difficulty  text default 'Media'
 servings    int  default 4
-ingredients jsonb  -- [{ name, grams, ingredient_id? }]
+ingredients jsonb  -- [{ id, name, source, ingredient_id?, fdc_id?, quantity, unit, grams, calories_per_100g?, ... }]
 steps       jsonb  -- [string]
 tags        jsonb  -- [string]
 photo_url   text
@@ -217,7 +246,6 @@ chef_id      uuid → auth.users
 consumer_id  uuid → auth.users
 created_at   timestamptz
 ```
-Vincula a un consumer con su chef.
 
 ### `consumer_profiles`
 ```sql
@@ -266,12 +294,69 @@ IngredientCatalogItem / IngredientPriceItem
 ```
 Nota: `consumerStore` define sus propios tipos locales (`Recipe`, `WeeklyPlan`, `PlanItem`, `PlanItemWithRecipe`) distintos de los de `lib/types/index.ts`.
 
+## Formulario de recetas (`app/(chef)/recipes/_form.tsx`)
+
+Componente central compartido por `new.tsx` (crear) y `[id].tsx` (editar).
+
+### Exports
+```ts
+export type RecipeFormIngredient { id, name, source, catalogIngredientId?, fdcId?, quantity, unit, grams, caloriesPer100g?, ... }
+export type RecipeFormData { name, cat, emoji, description, time, difficulty, servings, photo_url, photoUri?, ingredients, steps, is_published }
+export function RecipeForm({ initialValues?, onSave, onCancel })
+export default RecipeFormRoute  // componente vacío (null) para satisfacer Expo Router
+```
+
+### Patrón de header con Stack.Screen
+El formulario gestiona su propio header con `<Stack.Screen>` dentro del JSX (no `useNavigation` + `useLayoutEffect`). Esto es necesario porque `recipes/_layout.tsx` tiene `headerShown: false` globalmente.
+
+```tsx
+<Stack.Screen
+  options={{
+    headerShown: true,
+    title,
+    headerBlurEffect: 'systemMaterial',
+    headerTransparent: Platform.OS === 'ios',
+    contentStyle: { backgroundColor: colors.groupedBg }, // evita fondo negro detrás del header transparente
+    headerLeft: () => <Pressable onPress={handleCancel}><Text>Cancelar</Text></Pressable>,
+    headerRight: () => <Pressable onPress={handleSave}><Text>Guardar</Text></Pressable>,
+  }}
+/>
+```
+
+`contentStyle: { backgroundColor }` es crítico: sin él, el fondo detrás del header translúcido aparece negro.
+
+### Secciones del formulario
+1. Hero de foto (ImagePicker + BlurView overlay)
+2. Info básica: nombre, tiempo de preparación, descripción (modal)
+3. Categoría (chips horizontales)
+4. Dificultad: Fácil / Media / Difícil (chips)
+5. Porciones: 1–8 (chips)
+6. Ingredientes (swipeable para eliminar, modal de búsqueda catálogo/USDA)
+7. Grilla de nutrición (condicional: solo si hay ingredientes con datos)
+8. Pasos (swipeable para eliminar, modal para agregar)
+9. Visibilidad: switch publicar/despublicar
+
+### Colores iOS (light mode)
+```ts
+groupedBg:    '#f2f2f7'   // systemGroupedBackground
+cardBg:       '#ffffff'   // secondarySystemGroupedBackground
+label:        '#000000'
+secondLabel:  'rgba(60,60,67,0.6)'
+tertiaryLabel:'rgba(60,60,67,0.3)'
+separator:    'rgba(60,60,67,0.29)'
+systemBlue:   '#007AFF'
+systemGreen:  '#34C759'
+systemOrange: '#FF9500'
+systemRed:    '#FF3B30'
+systemGray:   'rgba(60,60,67,0.3)'
+```
+
 ## Funcionalidades implementadas
 
 ### Chef
 - CRUD completo de recetas con foto, ingredientes (con catálogo USDA), pasos, categoría, tiempo, dificultad
-- Formulario compartido en `lib/components/chef/RecipeForm.tsx` (usado por new.tsx y edit/[id].tsx)
-- Nutrición calculada inline en detalle de receta (kcal, proteínas, grasas, carbos)
+- Formulario iOS rediseñado en `app/(chef)/recipes/_form.tsx` (usado por `new.tsx` y `[id].tsx`)
+- Nutrición calculada inline en el formulario (kcal, proteínas, grasas, carbos)
 - Publicar/despublicar recetas para consumers
 - Calendario de servicios semanal
 - Vista de pedidos agregados por semana (cuántas porciones de cada receta)
@@ -291,6 +376,11 @@ Nota: `consumerStore` define sus propios tipos locales (`Recipe`, `WeeklyPlan`, 
 
 ## Decisiones técnicas importantes
 
+- **`<Stack.Screen>` en JSX vs `useNavigation().setOptions()`:** Para sobrescribir el `headerShown: false` del layout padre, se debe usar `<Stack.Screen options={...}>` renderizado dentro del componente. `useNavigation().setOptions()` + `useLayoutEffect` no es confiable cuando el layout padre tiene `headerShown: false`.
+- **`contentStyle` en `<Stack.Screen>`:** Necesario para setear el color de fondo visible detrás de un header transparente/blur. Sin esto, el Stack Navigator muestra fondo negro.
+- **`app/(chef)/recipes/[id].tsx` es editar, no detalle:** La lista de recetas navega a `/(chef)/recipes/${recipe.id}` para editar. No hay pantalla de detalle separada en el flujo del chef.
+- **`app/(chef)/recipes/edit/[id].tsx`:** Solo re-exporta `[id].tsx` (`export { default } from '../[id]'`). Mantiene compatibilidad con URLs antiguas.
+- **`try/catch/finally` en authStore:** Todos los métodos async garantizan `isLoading: false` en el bloque `finally`. Sin esto, cualquier error de Supabase deja el spinner infinito.
 - **`src/` eliminado:** todo el código compartido migró a `lib/`. No existe `src/` en el proyecto actual.
 - **Expo Router + grupos de rutas:** la lógica de rol/auth está centralizada en `app/_layout.tsx`. Los grupos `(chef)` y `(consumer)` son completamente independientes.
 - **Rutas planas en consumer y chef:** `profile`, `week` e `invite` son archivos `.tsx` directos, no subdirectorios con `index.tsx`.

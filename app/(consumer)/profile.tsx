@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { BlurView } from 'expo-blur';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -13,16 +14,22 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/stores/authStore';
 import { useConsumerStore } from '../../lib/stores/consumerStore';
+import { lightTheme, useTheme } from '../../lib/theme';
 
 function iosColor(name: string, fallback: string) {
   return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
 }
 
+const HEADER_HEIGHT = 52;
+
 export default function ConsumerProfileScreen() {
   const isDark = useColorScheme() === 'dark';
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const clearConsumerStore = useConsumerStore((s) => s.clear);
@@ -53,6 +60,8 @@ export default function ConsumerProfileScreen() {
 
     void loadProfile();
   }, [session?.user?.id]);
+
+  const linkedDate = useMemo(() => (linkedAt ? new Date(linkedAt).toLocaleDateString('es-UY') : '—'), [linkedAt]);
 
   const saveProfile = async (nextName: string, nextAllergies: string[]) => {
     const userId = session?.user?.id;
@@ -103,16 +112,20 @@ export default function ConsumerProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', isDark ? '#000' : '#F2F2F7') }]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.screenTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Perfil</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', colors.background) }]}>
+      <View style={[styles.headerWrap, { paddingTop: insets.top }]}> 
+        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.headerBlur}>
+          <Text style={[styles.headerTitle, { color: iosColor('label', colors.label) }]}>Perfil</Text>
+        </BlurView>
+      </View>
 
-        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', '#8E8E93') }]}>MI PERFIL</Text>
-        <View style={[styles.group, { backgroundColor: iosColor('secondarySystemGroupedBackground', isDark ? '#1C1C1E' : '#FFF') }]}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + HEADER_HEIGHT + 12, paddingHorizontal: 16, paddingBottom: 132 }} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>MI PERFIL</Text>
+        <View style={[styles.groupCard, { backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card) }]}>
           <Pressable style={[styles.row, { borderBottomColor: iosColor('separator', '#C6C6C8') }]} onPress={() => setEditingName((v) => !v)}>
-            <Text style={[styles.rowTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Tu nombre</Text>
+            <Text style={[styles.rowTitle, { color: iosColor('label', colors.label) }]}>Tu nombre</Text>
             <View style={styles.rowTrailing}>
-              <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', '#8E8E93') }]}>{displayName || 'Agregar'}</Text>
+              <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{displayName || 'Agregar'}</Text>
               <Ionicons name="chevron-forward" size={16} color={iosColor('tertiaryLabel', '#C7C7CC')} style={{ marginLeft: 4 }} />
             </View>
           </Pressable>
@@ -123,8 +136,8 @@ export default function ConsumerProfileScreen() {
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder="Tu nombre"
-                placeholderTextColor={iosColor('tertiaryLabel', '#8E8E93')}
-                style={[styles.input, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}
+                placeholderTextColor={iosColor('tertiaryLabel', colors.secondaryLabel)}
+                style={[styles.input, { color: iosColor('label', colors.label) }]}
               />
               <Pressable
                 onPress={async () => {
@@ -132,60 +145,60 @@ export default function ConsumerProfileScreen() {
                   setEditingName(false);
                 }}
               >
-                <Text style={{ color: iosColor('systemBlue', '#007AFF'), fontWeight: '600' }}>Guardar</Text>
+                <Text style={styles.saveText}>Guardar</Text>
               </Pressable>
             </View>
           ) : null}
 
           <View style={styles.allergyBlock}>
-            <Text style={[styles.rowTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Alergias</Text>
+            <Text style={[styles.rowTitle, { color: iosColor('label', colors.label) }]}>Alergias</Text>
             <View style={styles.allergyChipsWrap}>
-              {allergies.map((item) => (
-                <Pressable
-                  key={item}
-                  onPress={() => void onRemoveAllergy(item)}
-                  style={[styles.allergyChip, { backgroundColor: iosColor('tertiarySystemBackground', '#EFEFF4') }]}
-                >
-                  <Text style={[styles.allergyChipText, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{item} ×</Text>
-                </Pressable>
-              ))}
+              {allergies.length ? (
+                allergies.map((item) => (
+                  <Pressable
+                    key={item}
+                    onPress={() => void onRemoveAllergy(item)}
+                    style={[styles.allergyChip, { backgroundColor: iosColor('tertiarySystemGroupedBackground', '#EFEFF4') }]}
+                  >
+                    <Text style={[styles.allergyChipText, { color: iosColor('label', colors.label) }]}>{item} ×</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={[styles.emptyInline, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>Sin alergias cargadas</Text>
+              )}
             </View>
             <View style={styles.addAllergyRow}>
               <TextInput
                 value={allergyInput}
                 onChangeText={setAllergyInput}
                 placeholder="Agregar alergia"
-                placeholderTextColor={iosColor('tertiaryLabel', '#8E8E93')}
-                style={[styles.input, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}
+                placeholderTextColor={iosColor('tertiaryLabel', colors.secondaryLabel)}
+                style={[styles.input, { color: iosColor('label', colors.label) }]}
               />
               <Pressable onPress={() => void onAddAllergy()}>
-                <Text style={{ color: iosColor('systemBlue', '#007AFF'), fontWeight: '600', marginLeft: 10 }}>Agregar</Text>
+                <Text style={styles.saveText}>Agregar</Text>
               </Pressable>
             </View>
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', '#8E8E93') }]}>MI CHEF</Text>
-        <View style={[styles.group, { backgroundColor: iosColor('secondarySystemGroupedBackground', isDark ? '#1C1C1E' : '#FFF') }]}>
+        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>MI CHEF</Text>
+        <View style={[styles.groupCard, { backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card) }]}>
           <View style={[styles.row, { borderBottomColor: iosColor('separator', '#C6C6C8') }]}>
-            <Text style={[styles.rowTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Chef</Text>
-            <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-              {chefId ? `ID ${chefId.slice(0, 8)}` : 'Sin vincular'}
-            </Text>
+            <Text style={[styles.rowTitle, { color: iosColor('label', colors.label) }]}>Chef</Text>
+            <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{chefId ? `ID ${chefId.slice(0, 8)}` : 'Sin vincular'}</Text>
           </View>
           <View style={[styles.row, { borderBottomColor: iosColor('separator', '#C6C6C8') }]}>
-            <Text style={[styles.rowTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Vinculado desde</Text>
-            <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-              {linkedAt ? new Date(linkedAt).toLocaleDateString('es-UY') : '—'}
-            </Text>
+            <Text style={[styles.rowTitle, { color: iosColor('label', colors.label) }]}>Vinculado desde</Text>
+            <Text style={[styles.rowValue, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{linkedDate}</Text>
           </View>
           <Pressable style={styles.row} onPress={onUnlink}>
             <Text style={[styles.rowTitle, { color: iosColor('systemRed', '#FF3B30') }]}>Desvincularme</Text>
           </Pressable>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', '#8E8E93') }]}>CUENTA</Text>
-        <View style={[styles.group, { backgroundColor: iosColor('secondarySystemGroupedBackground', isDark ? '#1C1C1E' : '#FFF') }]}>
+        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>CUENTA</Text>
+        <View style={[styles.groupCard, { backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card) }]}>
           <Pressable style={styles.row} onPress={onSignOut}>
             <Text style={[styles.rowTitle, { color: iosColor('systemRed', '#FF3B30') }]}>Cerrar sesión</Text>
           </Pressable>
@@ -197,12 +210,37 @@ export default function ConsumerProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
-  screenTitle: { fontSize: 34, fontWeight: '700', marginTop: 8, marginBottom: 14 },
-  sectionLabel: { fontSize: 12, fontWeight: '600', marginTop: 16, marginBottom: 6, paddingHorizontal: 4 },
-  group: { borderRadius: 12, overflow: 'hidden' },
+  headerWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+  },
+  headerBlur: {
+    height: HEADER_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: iosColor('separator', '#C6C6C8'),
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  sectionLabel: { fontSize: 12, fontWeight: '700', marginTop: 18, marginBottom: 8, paddingHorizontal: 4 },
+  groupCard: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: lightTheme.colors.label,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 4,
+  },
   row: {
-    minHeight: 52,
+    minHeight: 54,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -213,17 +251,20 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 15 },
   rowTrailing: { flexDirection: 'row', alignItems: 'center' },
   inlineEditor: {
-    minHeight: 52,
+    minHeight: 54,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
   },
-  input: { flex: 1, minHeight: 38, fontSize: 16 },
+  input: { flex: 1, minHeight: 40, fontSize: 16 },
+  saveText: { color: iosColor('systemBlue', '#007AFF'), fontWeight: '700', marginLeft: 10 },
   allergyBlock: { paddingHorizontal: 14, paddingVertical: 12 },
   allergyChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
-  allergyChip: { borderRadius: 16, paddingHorizontal: 10, minHeight: 28, justifyContent: 'center', marginRight: 8, marginBottom: 8 },
+  allergyChip: { borderRadius: 16, paddingHorizontal: 10, minHeight: 30, justifyContent: 'center', marginRight: 8, marginBottom: 8 },
   allergyChipText: { fontSize: 13, fontWeight: '600' },
+  emptyInline: { fontSize: 14, fontStyle: 'italic' },
   addAllergyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
 });
+

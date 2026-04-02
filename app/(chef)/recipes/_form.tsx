@@ -6,12 +6,14 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -32,6 +34,7 @@ import {
   fetchUsdaFoodNutrition,
   searchUsdaIngredients,
 } from '../../../lib/services/ingredients';
+import { lightTheme, useTheme } from '../../../lib/theme';
 import { IngredientCatalogItem, IngredientPriceItem } from '../../../lib/types';
 import { computeNutrition } from '../../../lib/utils/calculations';
 import { IngredientUnit, UNIT_OPTIONS, toGrams } from '../../../lib/utils/units';
@@ -80,6 +83,7 @@ export type RecipeFormData = {
   photo_url: string;
   photoUri: string | null;
   is_published: boolean;
+  base_price: number;
   ingredients: RecipeFormIngredient[];
   steps: string[];
 };
@@ -103,23 +107,24 @@ const DIFFICULTY_OPTIONS: Array<{ key: Difficulty; label: string; color: string 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
 function useColors() {
+  const { colors } = useTheme();
   return useMemo(
     () => ({
-      groupedBg: '#f2f2f7',
-      cardBg: '#ffffff',
-      label: '#000000',
-      secondaryLabel: 'rgba(60,60,67,0.6)',
-      tertiaryLabel: 'rgba(60,60,67,0.3)',
-      separator: 'rgba(60,60,67,0.29)',
-      tertiaryGroupedBg: '#f2f2f7',
-      secondaryGroupedBg: '#f2f2f7',
-      systemBlue: '#007AFF',
-      systemGreen: '#34C759',
-      systemOrange: '#FF9500',
-      systemRed: '#FF3B30',
-      systemGray: '#8E8E93',
+      groupedBg: colors.background,
+      cardBg: colors.card,
+      label: colors.label,
+      secondaryLabel: colors.secondaryLabel,
+      tertiaryLabel: colors.tertiaryLabel,
+      separator: colors.separator,
+      tertiaryGroupedBg: colors.background,
+      secondaryGroupedBg: colors.background,
+      systemBlue: colors.primary,
+      systemGreen: colors.success,
+      systemOrange: colors.warning,
+      systemRed: colors.danger,
+      systemGray: colors.secondaryLabel,
     }),
-    []
+    [colors]
   );
 }
 
@@ -323,7 +328,7 @@ function IngredientSearchModal({
                     onPress={() => setUnit(u)}
                     style={[s.chip, { backgroundColor: u === unit ? colors.systemBlue : colors.tertiaryGroupedBg }]}
                   >
-                    <Text style={[s.chipText, { color: u === unit ? '#fff' : colors.label }]}>{u}</Text>
+                    <Text style={[s.chipText, { color: u === unit ? colors.cardBg : colors.label }]}>{u}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -433,7 +438,6 @@ function AddStepModal({
 export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
   const colors = useColors();
   const isEdit = initialValues != null;
-  const title = isEdit ? 'Editar receta' : 'Nueva receta';
 
   const [name, setName] = useState(initialValues?.name ?? '');
   const [time, setTime] = useState(initialValues?.time ?? '');
@@ -441,6 +445,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
   const [cat, setCat] = useState(initialValues?.cat ?? 'Principal');
   const [difficulty, setDifficulty] = useState<Difficulty>(initialValues?.difficulty ?? 'medium');
   const [servings, setServings] = useState(initialValues?.servings ?? 4);
+  const [basePrice, setBasePrice] = useState(initialValues?.base_price ?? 0);
   const [ingredients, setIngredients] = useState<RecipeFormIngredient[]>(initialValues?.ingredients ?? []);
   const [steps, setSteps] = useState<string[]>(initialValues?.steps ?? []);
   const [isPublished, setIsPublished] = useState(initialValues?.is_published ?? false);
@@ -454,6 +459,17 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
   const [showIngredientModal, setShowIngredientModal] = useState(false);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showAddStepModal, setShowAddStepModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }, [toastOpacity]);
 
   const markDirty = useCallback(() => setIsDirty(true), []);
   const canSave = name.trim().length > 0;
@@ -480,13 +496,21 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
 
   const handleCancel = useCallback(() => {
     if (!isDirty) { onCancel(); return; }
+
+    if (Platform.OS === 'web') {
+      const confirmDiscard = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
+      const shouldDiscard = confirmDiscard?.('Perderás todos los cambios realizados. ¿Descartar cambios?');
+      if (shouldDiscard) onCancel();
+      return;
+    }
+
     Alert.alert('¿Descartar cambios?', 'Perderás todos los cambios realizados.', [
       { text: 'Seguir editando', style: 'cancel' },
       { text: 'Descartar', style: 'destructive', onPress: onCancel },
     ]);
   }, [isDirty, onCancel]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (forcePublish = false) => {
     if (!canSave || isSaving) return;
     setIsSaving(true);
     try {
@@ -498,19 +522,22 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
         time: time.trim(),
         difficulty,
         servings,
+        base_price: basePrice,
         photo_url: photoUrl,
         photoUri,
-        is_published: isPublished,
+        is_published: forcePublish ? true : isPublished,
         ingredients,
         steps,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('Receta guardada');
     } catch (e: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast('No se pudo guardar');
       Alert.alert('Error al guardar', e?.message ?? 'Inténtalo de nuevo.');
       setIsSaving(false);
     }
-  }, [canSave, isSaving, onSave, name, cat, description, time, difficulty, servings, photoUrl, photoUri, isPublished, ingredients, steps]);
+  }, [canSave, isSaving, onSave, name, cat, description, time, difficulty, servings, basePrice, photoUrl, photoUri, isPublished, ingredients, steps, showToast]);
 
   const openPhotoPicker = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -583,22 +610,30 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
     [ingredients, servings]
   );
 
+  const costPerServing = useMemo(() => {
+    const total = ingredients.reduce((acc, item) => {
+      const pricePer100g = Number(item.pricePer100g ?? 0);
+      const grams = Number(item.grams ?? 0);
+      return acc + (grams / 100) * pricePer100g;
+    }, 0);
+    return total / Math.max(1, servings);
+  }, [ingredients, servings]);
+
+  const suggestedPrice = useMemo(() => {
+    if (costPerServing <= 0) return basePrice > 0 ? basePrice : 0;
+    return Math.max(basePrice, Math.round(costPerServing * 2.4 * 10) / 10);
+  }, [basePrice, costPerServing]);
+
   const displayPhoto = photoUri ?? (photoUrl || null);
 
   return (
     <>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.groupedBg }}>
-        <View style={[s.inlineActions, { borderBottomColor: colors.separator, backgroundColor: colors.groupedBg }]}>
-          <Pressable onPress={handleCancel} hitSlop={8}>
-            <Text style={{ color: colors.systemBlue, fontSize: 17 }}>Cancelar</Text>
-          </Pressable>
-          <Text style={[s.inlineActionsTitle, { color: colors.label }]}>{title}</Text>
-          <Pressable onPress={() => void handleSave()} disabled={!canSave || isSaving} hitSlop={8}>
-            <Text style={{ color: canSave && !isSaving ? colors.systemBlue : colors.systemGray, fontSize: 17, fontWeight: '600' }}>
-              {isSaving ? 'Guardando…' : 'Guardar'}
-            </Text>
-          </Pressable>
-        </View>
+        <Animated.View pointerEvents="none" style={[s.toastWrap, { opacity: toastOpacity }]}>
+          <View style={s.toast}>
+            <Text style={s.toastText}>{toastMessage}</Text>
+          </View>
+        </Animated.View>
         <KeyboardAvoidingView
           style={{ flex: 1, backgroundColor: colors.groupedBg }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -621,7 +656,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
               <>
                 <Image source={{ uri: displayPhoto }} style={s.photoImage} />
                 <BlurView intensity={60} tint="systemMaterial" style={s.photoOverlay}>
-                  <Ionicons name="camera-outline" size={16} color="#000000" />
+                  <Ionicons name="camera-outline" size={16} color={colors.label} />
                   <Text style={s.photoOverlayText}>Cambiar</Text>
                 </BlurView>
               </>
@@ -699,7 +734,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
                     },
                   ]}
                 >
-                  <Text style={[s.chipText, { color: active ? '#fff' : colors.label }]}>{opt}</Text>
+                  <Text style={[s.chipText, { color: active ? colors.cardBg : colors.label }]}>{opt}</Text>
                 </Pressable>
               );
             })}
@@ -724,7 +759,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
                     },
                   ]}
                 >
-                  <Text style={[s.chipText, { color: active ? '#fff' : colors.label }]}>{opt.label}</Text>
+                  <Text style={[s.chipText, { color: active ? colors.cardBg : colors.label }]}>{opt.label}</Text>
                 </Pressable>
               );
             })}
@@ -749,13 +784,60 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
                     },
                   ]}
                 >
-                  <Text style={[s.chipText, { color: active ? '#fff' : colors.label }]}>{n}</Text>
+                  <Text style={[s.chipText, { color: active ? colors.cardBg : colors.label }]}>{n}</Text>
                 </Pressable>
               );
             })}
           </View>
 
-          {/* ── 6: Ingredientes ── */}
+          {/* ── 6: Precio + preview ── */}
+          <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>PRECIO</Text>
+          <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+            <View style={[s.row, { minHeight: 64 }]}>
+              <Text style={[s.rowLabel, { color: colors.label }]}>Precio base</Text>
+              <View style={s.priceInputWrap}>
+                <Text style={[s.priceCurrency, { color: colors.secondaryLabel }]}>$</Text>
+                <TextInput
+                  value={basePrice ? String(basePrice) : ''}
+                  onChangeText={(t) => {
+                    const normalized = t.replace(',', '.').replace(/[^\d.]/g, '');
+                    setBasePrice(Number(normalized) || 0);
+                    markDirty();
+                  }}
+                  placeholder="0.0"
+                  placeholderTextColor={colors.tertiaryLabel}
+                  keyboardType="decimal-pad"
+                  style={[s.priceInput, { color: colors.label }]}
+                />
+                <Text style={[s.priceSuffix, { color: colors.secondaryLabel }]}>por porción</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>VISTA PREVIA</Text>
+          <View style={[s.previewCard, { backgroundColor: colors.cardBg }]}>
+            {displayPhoto ? (
+              <Image source={{ uri: displayPhoto }} style={s.previewImage} />
+            ) : (
+              <View style={[s.previewImage, { backgroundColor: colors.tertiaryGroupedBg, alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="restaurant-outline" size={26} color={colors.systemGray} />
+              </View>
+            )}
+            <View style={s.previewBody}>
+              <Text style={[s.previewName, { color: colors.label }]} numberOfLines={1}>
+                {name.trim() || 'Nombre del plato'}
+              </Text>
+              <Text style={[s.previewMeta, { color: colors.secondaryLabel }]} numberOfLines={1}>
+                {cat || 'Categoría'} · {servings} porciones
+              </Text>
+              <View style={s.previewStatsRow}>
+                <Text style={[s.previewPrice, { color: colors.systemBlue }]}>${(basePrice || suggestedPrice || 0).toFixed(1)}</Text>
+                <Text style={[s.previewKcal, { color: colors.secondaryLabel }]}>{nutrition.calories.toFixed(0)} kcal</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── 7: Ingredientes ── */}
           <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>INGREDIENTES</Text>
           <View style={[s.card, { backgroundColor: colors.cardBg }]}>
             {ingredients.map((item, idx) => {
@@ -804,10 +886,10 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
             </Pressable>
           </View>
 
-          {/* ── 7: Resumen nutricional ── */}
+          {/* ── 8: Resumen nutricional ── */}
           {hasNutrition && (
             <>
-              <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>RESUMEN NUTRICIONAL</Text>
+              <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>NUTRICIÓN</Text>
               <View style={[s.card, { backgroundColor: colors.cardBg, paddingHorizontal: 16, paddingVertical: 14 }]}>
                 <Text style={{ fontSize: 13, color: colors.secondaryLabel, marginBottom: 10 }}>
                   Por porción ({servings} {servings === 1 ? 'porción' : 'porciones'})
@@ -832,7 +914,23 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
             </>
           )}
 
-          {/* ── 8: Preparación ── */}
+          <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>RESUMEN FINAL</Text>
+          <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+            <View style={s.row}>
+              <Text style={[s.rowLabel, { color: colors.label }]}>Calorías por porción</Text>
+              <Text style={[s.rowInputRight, { color: colors.label }]}>{nutrition.calories.toFixed(0)} kcal</Text>
+            </View>
+            <View style={[s.row, rowSep(colors.separator)]}>
+              <Text style={[s.rowLabel, { color: colors.label }]}>Costo estimado</Text>
+              <Text style={[s.rowInputRight, { color: colors.secondaryLabel }]}>${costPerServing.toFixed(2)}</Text>
+            </View>
+            <View style={[s.row, rowSep(colors.separator)]}>
+              <Text style={[s.rowLabel, { color: colors.label }]}>Precio sugerido</Text>
+              <Text style={[s.rowInputRight, { color: colors.systemBlue, fontWeight: '700' }]}>${suggestedPrice.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          {/* ── 9: Preparación ── */}
           <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>PREPARACIÓN</Text>
           <View style={[s.card, { backgroundColor: colors.cardBg }]}>
             {steps.map((step, idx) => (
@@ -872,7 +970,7 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
             </Pressable>
           </View>
 
-          {/* ── 9: Visibilidad ── */}
+          {/* ── 10: Visibilidad ── */}
           <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>VISIBILIDAD</Text>
           <View style={[s.card, { backgroundColor: colors.cardBg }]}>
             <View style={[s.row, { minHeight: 62 }]}>
@@ -890,9 +988,33 @@ export function RecipeForm({ initialValues, onSave, onCancel }: Props) {
                   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
                 trackColor={{ true: '#34C759', false: undefined }}
-                thumbColor="#ffffff"
+                thumbColor={colors.cardBg}
               />
             </View>
+          </View>
+
+          {/* ── 11: Acciones ── */}
+          <Text style={[s.sectionHeader, { color: colors.secondaryLabel }]}>ACCIONES</Text>
+          <View style={[s.actionsWrap, { marginHorizontal: 16 }]}>
+            <Pressable
+              onPress={() => void handleSave(true)}
+              disabled={!canSave || isSaving}
+              style={({ pressed }) => [
+                s.saveButton,
+                {
+                  backgroundColor: canSave && !isSaving ? colors.systemBlue : colors.systemGray,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text style={s.saveButtonText}>
+                {isSaving ? 'Guardando…' : 'Guardar y publicar'}
+              </Text>
+            </Pressable>
+
+            <Pressable onPress={handleCancel} disabled={isSaving} style={s.cancelButton}>
+              <Text style={[s.cancelButtonText, { color: colors.systemRed }]}>Cancelar</Text>
+            </Pressable>
           </View>
 
           </ScrollView>
@@ -932,20 +1054,53 @@ export default function RecipeFormRoute() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  inlineActions: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
+  toastWrap: {
+    position: 'absolute',
+    top: 14,
+    left: 0,
+    right: 0,
+    zIndex: 50,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  inlineActionsTitle: {
-    fontSize: 17,
+  toast: {
+    backgroundColor: 'rgba(28,28,30,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 34,
+    justifyContent: 'center',
+  },
+  toastText: {
+    color: lightTheme.colors.card,
+    fontSize: 13,
     fontWeight: '700',
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 120,
+  },
+  actionsWrap: {
+    marginTop: 4,
+  },
+  saveButton: {
+    minHeight: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    color: lightTheme.colors.card,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  cancelButton: {
+    marginTop: 10,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   // Photo
@@ -978,7 +1133,7 @@ const s = StyleSheet.create({
   photoOverlayText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: lightTheme.colors.label,
   },
   photoPlaceholder: {
     alignItems: 'center',
@@ -1034,10 +1189,70 @@ const s = StyleSheet.create({
     fontSize: 15,
     textAlign: 'right',
   },
+  priceInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  priceCurrency: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginRight: 4,
+  },
+  priceInput: {
+    minWidth: 90,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    textAlign: 'right',
+    paddingVertical: 0,
+  },
+  priceSuffix: {
+    marginLeft: 8,
+    fontSize: 12,
+    fontWeight: '500',
+  },
   stepRow: {
     minHeight: 54,
     paddingVertical: 10,
     alignItems: 'flex-start',
+  },
+  previewCard: {
+    borderRadius: 12,
+    marginHorizontal: 16,
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: 140,
+    resizeMode: 'cover',
+  },
+  previewBody: {
+    padding: 12,
+  },
+  previewName: {
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  previewMeta: {
+    marginTop: 2,
+    fontSize: 13,
+  },
+  previewStatsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewPrice: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  previewKcal: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   // Chips
@@ -1086,7 +1301,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   addCircleText: {
-    color: '#fff',
+    color: lightTheme.colors.card,
     fontSize: 18,
     fontWeight: '400',
     lineHeight: 22,
@@ -1103,7 +1318,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   stepCircleText: {
-    color: '#fff',
+    color: lightTheme.colors.card,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1116,7 +1331,7 @@ const s = StyleSheet.create({
     width: 80,
   },
   swipeDeleteText: {
-    color: '#fff',
+    color: lightTheme.colors.card,
     fontSize: 14,
     fontWeight: '600',
   },

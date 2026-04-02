@@ -1,22 +1,24 @@
-import { Alert, Platform, ToastAndroid } from 'react-native';
-import Toast from 'react-native-toast-message';
+export type ToastType = 'success' | 'error';
 
-export function showSuccess(message: string) {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(message, ToastAndroid.SHORT);
-    return;
-  }
-  Toast.show({ type: 'success', text1: message });
+export type ToastInput = {
+  type: ToastType;
+  message: string;
+  duration?: number;
+};
+
+type ToastListener = (toast: Required<ToastInput>) => void;
+
+const listeners = new Set<ToastListener>();
+
+export function showToast(input: ToastInput) {
+  const toast: Required<ToastInput> = {
+    ...input,
+    duration: input.duration ?? 2400,
+  };
+  listeners.forEach((listener) => listener(toast));
 }
 
-export function showError(message: string) {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(message, ToastAndroid.SHORT);
-    return;
-  }
-  Toast.show({ type: 'error', text1: message });
-}
-
-export function showBlockingError(message: string) {
-  Alert.alert('Error', message);
+export function subscribeToast(listener: ToastListener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }

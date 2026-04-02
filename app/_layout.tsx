@@ -2,20 +2,17 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Platform, PlatformColor, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/stores/authStore';
-
-function getSystemBackground() {
-  if (Platform.OS === 'ios') return PlatformColor('systemBackground');
-  return '#FFFFFF';
-}
+import { useTheme } from '../lib/theme';
+import { ToastViewport } from '../lib/ui';
 
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
-  const bgColor = getSystemBackground();
+  const { colors } = useTheme();
 
   const session = useAuthStore((s) => s.session);
   const role = useAuthStore((s) => s.role);
@@ -122,8 +119,8 @@ export default function RootLayout() {
   if (isLoading) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: bgColor }}>
-          <ActivityIndicator size="large" color={Platform.OS === 'ios' ? PlatformColor('systemBlue') : '#007AFF'} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </GestureHandlerRootView>
     );
@@ -132,6 +129,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }} />
+      <ToastViewport />
     </GestureHandlerRootView>
   );
 }

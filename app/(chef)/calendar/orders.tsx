@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import * as Haptics from 'expo-haptics';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LayoutAnimation,
   Platform,
@@ -8,45 +9,97 @@ import {
   Pressable,
   RefreshControl,
   SafeAreaView,
-  ScrollView,
-  Share,
+  SectionList,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
 import { useChefDashboardStore } from '../../../lib/stores/chefDashboardStore';
+import { lightTheme, useTheme } from '../../../lib/theme';
 
 function iosColor(name: string, fallback: string) {
   return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
 }
 
-const dayLabels: Record<string, string> = {
-  mon: 'L',
-  tue: 'M',
-  wed: 'X',
-  thu: 'J',
-  fri: 'V',
-  sat: 'S',
-  sun: 'D',
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+type DishEntry = {
+  id: string;
+  recipeName: string;
+  servings: number;
 };
 
+type DayGroup = {
+  key: DayKey;
+  label: string;
+  dishes: DishEntry[];
+};
+
+type CustomerSection = {
+  key: string;
+  title: string;
+  initials: string;
+  totalPlates: number;
+  totalServings: number;
+  days: DayGroup[];
+  data: Array<{ type: 'customer-body' }>;
+};
+
+const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+const DAY_LABELS: Record<DayKey, string> = {
+  mon: 'Lunes',
+  tue: 'Martes',
+  wed: 'Miércoles',
+  thu: 'Jueves',
+  fri: 'Viernes',
+  sat: 'Sábado',
+  sun: 'Domingo',
+};
+
+function toInitials(name: string) {
+  const safe = name.trim();
+  if (!safe) return 'CL';
+  const parts = safe.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+}
+
 export default function ChefWeeklyOrdersScreen() {
-  const isDark = false;
+  const { colors } = useTheme();
+
   const consumers = useChefDashboardStore((s) => s.consumers);
   const weekOrders = useChefDashboardStore((s) => s.weekOrders);
   const selectedWeekStart = useChefDashboardStore((s) => s.selectedWeekStart);
   const fetchConsumers = useChefDashboardStore((s) => s.fetchConsumers);
   const fetchWeekOrders = useChefDashboardStore((s) => s.fetchWeekOrders);
   const navigateWeek = useChefDashboardStore((s) => s.navigateWeek);
-  const computeAggregate = useChefDashboardStore((s) => s.computeAggregate);
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       const run = async () => {
-        await fetchConsumers();
-        await fetchWeekOrders(selectedWeekStart);
+        try {
+          setIsLoading(true);
+          setError(null);
+          await fetchConsumers();
+          await fetchWeekOrders(selectedWeekStart);
+        } catch {
+          setError('No se pudieron cargar los pedidos de la semana.');
+        } finally {
+          setIsLoading(false);
+        }
       };
       void run();
     }, [fetchConsumers, fetchWeekOrders, selectedWeekStart])
@@ -60,166 +113,350 @@ export default function ChefWeeklyOrdersScreen() {
     return `Lun ${start.getDate()} – Dom ${end.getDate()} ${month}`;
   }, [selectedWeekStart]);
 
-  const aggregate = computeAggregate(weekOrders);
+  const sections = useMemo<CustomerSection[]>(() => {
+    const groupByConsumer = new Map(weekOrders.map((group) => [group.consumer.consumerId, group]));
+
+    return consumers
+      .map((consumer) => {
+        const group = groupByConsumer.get(consumer.consumerId);
+        const dayMap = new Map<DayKey, DishEntry[]>();
+
+        if (group) {
+          group.items.forEach((item) => {
+            const recipeName = item.recipe?.name || 'Receta';
+            item.days.forEach((day) => {
+              if (!DAY_ORDER.includes(day as DayKey)) return;
+              const key = day as DayKey;
+              const current = dayMap.get(key) ?? [];
+              current.push({
+                id: `${item.id}-${key}`,
+                recipeName,
+                servings: Math.max(1, item.servings || 1),
+              });
+              dayMap.set(key, current);
+            });
+          });
+        }
+
+        const days = DAY_ORDER
+          .map((day): DayGroup | null => {
+            const dishes = dayMap.get(day) ?? [];
+            if (!dishes.length) return null;
+            return {
+              key: day,
+              label: DAY_LABELS[day],
+              dishes,
+            };
+          })
+          .filter(Boolean) as DayGroup[];
+
+        const totalPlates = days.reduce((acc, day) => acc + day.dishes.length, 0);
+        const totalServings = days.reduce(
+          (acc, day) => acc + day.dishes.reduce((inner, dish) => inner + dish.servings, 0),
+          0
+        );
+
+        return {
+          key: consumer.consumerId,
+          title: consumer.displayName.trim() || 'Cliente',
+          initials: toInitials(consumer.displayName || ''),
+          totalPlates,
+          totalServings,
+          days,
+          data: [{ type: 'customer-body' as const }],
+        };
+      })
+      .sort((a, b) => b.totalServings - a.totalServings);
+  }, [consumers, weekOrders]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchConsumers();
-    await fetchWeekOrders(selectedWeekStart);
+    try {
+      setError(null);
+      await fetchConsumers();
+      await fetchWeekOrders(selectedWeekStart);
+    } catch {
+      setError('No se pudieron actualizar los pedidos.');
+    }
     setRefreshing(false);
   };
 
-  const onShare = async () => {
-    const lines: string[] = [];
-    lines.push(`Resumen semanal (${weekTitle})`);
-    lines.push('');
-    aggregate.forEach((entry) => {
-      const recipeName = entry.recipe?.name ?? 'Receta';
-      const consumersUsing = weekOrders
-        .filter((group) => group.items.some((item) => item.recipe_id === entry.recipe?.id))
-        .map((group) => group.consumer.displayName)
-        .join(', ');
-      lines.push(`• ${recipeName}: ${entry.totalServings} porciones (${entry.consumerCount} consumidores)`);
-      if (consumersUsing) {
-        lines.push(`  ${consumersUsing}`);
-      }
-    });
-
-    await Share.share({ message: lines.join('\n') });
+  const toggleCustomer = async (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+    await Haptics.selectionAsync();
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', isDark ? '#000' : '#F2F2F7') }]}>
-      <ScrollView
+    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', colors.background) }]}>
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={async () => {
+            await Haptics.selectionAsync();
+            await navigateWeek('prev');
+          }}
+          style={styles.chevronButton}
+        >
+          <Text style={[styles.chevronText, { color: iosColor('systemBlue', colors.primary) }]}>‹</Text>
+        </Pressable>
+        <Text style={[styles.weekTitle, { color: iosColor('label', colors.label) }]}>{weekTitle}</Text>
+        <Pressable
+          onPress={async () => {
+            await Haptics.selectionAsync();
+            await navigateWeek('next');
+          }}
+          style={styles.chevronButton}
+        >
+          <Text style={[styles.chevronText, { color: iosColor('systemBlue', colors.primary) }]}>›</Text>
+        </Pressable>
+      </View>
+
+      <SectionList
+        sections={sections}
+        keyExtractor={(item, index) => `${index}-${item.type}`}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
-      >
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => void navigateWeek('prev')} style={styles.chevronButton}>
-            <Text style={[styles.chevronText, { color: iosColor('systemBlue', '#007AFF') }]}>‹</Text>
-          </Pressable>
-          <Text style={[styles.weekTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{weekTitle}</Text>
-          <Pressable onPress={() => void navigateWeek('next')} style={styles.chevronButton}>
-            <Text style={[styles.chevronText, { color: iosColor('systemBlue', '#007AFF') }]}>›</Text>
-          </Pressable>
-        </View>
-
-        <Pressable style={styles.shareButton} onPress={() => void onShare()}>
-          <Ionicons name="share-outline" size={16} color={iosColor('systemBlue', '#007AFF')} />
-          <Text style={[styles.shareText, { color: iosColor('systemBlue', '#007AFF') }]}>Compartir resumen</Text>
-        </Pressable>
-
-        {weekOrders.map((group) => {
-          const totalServings = group.items.reduce((sum, item) => sum + item.servings * Math.max(1, item.days.length), 0);
-          const isExpanded = !!expanded[group.consumer.consumerId];
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <Text style={[styles.screenTitle, { color: iosColor('label', colors.label) }]}>Pedidos por cliente</Text>
+            <Text style={[styles.screenSubtitle, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+              Semana {weekTitle}
+            </Text>
+          </View>
+        }
+        renderSectionHeader={({ section }) => {
+          const isExpanded = expanded[section.key] ?? true;
 
           return (
-            <View key={group.consumer.consumerId} style={[styles.card, { backgroundColor: iosColor('secondarySystemGroupedBackground', '#FFF') }]}>
-              <Pressable
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setExpanded((prev) => ({ ...prev, [group.consumer.consumerId]: !isExpanded }));
-                }}
-                style={styles.cardHeader}
-              >
-                <View style={[styles.avatar, { backgroundColor: 'rgba(0,122,255,0.15)' }]}>
-                  <Text style={{ color: iosColor('systemBlue', '#007AFF'), fontWeight: '700' }}>
-                    {group.consumer.displayName.slice(0, 2).toUpperCase()}
+            <View
+              style={[
+                styles.customerCard,
+                {
+                  backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card),
+                },
+              ]}
+            >
+              <Pressable style={styles.customerHeader} onPress={() => toggleCustomer(section.key)}>
+                <View style={[styles.avatar, { backgroundColor: iosColor('tertiarySystemFill', colors.fill) }]}>
+                  <Text style={[styles.avatarText, { color: iosColor('systemBlue', colors.primary) }]}>
+                    {section.initials}
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.consumerName, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{group.consumer.displayName}</Text>
-                  <Text style={[styles.consumerMeta, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-                    {group.items.length} recetas · {totalServings} porciones total
+
+                <View style={styles.customerInfo}>
+                  <Text style={[styles.customerName, { color: iosColor('label', colors.label) }]}>{section.title}</Text>
+                  <Text style={[styles.customerTotals, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+                    {section.totalPlates} plato{section.totalPlates !== 1 ? 's' : ''} · {section.totalServings} porciones
                   </Text>
                 </View>
+
                 <Ionicons
                   name={isExpanded ? 'chevron-up' : 'chevron-down'}
                   size={18}
-                  color={iosColor('tertiaryLabel', '#8E8E93')}
+                  color={iosColor('tertiaryLabel', colors.tertiaryLabel)}
                 />
               </Pressable>
+            </View>
+          );
+        }}
+        renderItem={({ section }) => {
+          const isExpanded = expanded[section.key] ?? true;
 
-              {isExpanded ? (
-                <View style={styles.cardBody}>
-                  {group.items.map((item) => (
-                    <View key={item.id} style={styles.recipeRow}>
-                      <Text style={styles.recipeEmoji}>{item.recipe?.emoji || '🍽️'}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.recipeName, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>
-                          {item.recipe?.name || 'Receta'}
-                        </Text>
-                        <Text style={[styles.recipeMeta, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-                          {item.days.map((d) => dayLabels[d] || d).join(', ')} · {item.servings} porciones
-                        </Text>
-                      </View>
+          if (!isExpanded) return null;
+
+          if (!section.days.length) {
+            return (
+              <View style={[styles.customerBody, styles.noOrdersRow]}>
+                <Text style={[styles.noOrdersText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>Sin pedidos para esta semana</Text>
+              </View>
+            );
+          }
+
+          return (
+            <View style={styles.customerBody}>
+              {section.days.map((day, dayIndex) => (
+                <View key={`${section.key}-${day.key}`} style={[styles.dayGroup, dayIndex > 0 && styles.dayGroupBorder]}>
+                  <Text style={[styles.dayTitle, { color: iosColor('label', colors.label) }]}>{day.label}</Text>
+
+                  {day.dishes.map((dish, dishIndex) => (
+                    <View key={dish.id} style={[styles.dishRow, dishIndex > 0 && styles.dishRowGap]}>
+                      <Text style={[styles.dishBullet, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>•</Text>
+                      <Text style={[styles.dishText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+                        {dish.recipeName} — {dish.servings} porciones
+                      </Text>
                     </View>
                   ))}
                 </View>
-              ) : null}
+              ))}
             </View>
           );
-        })}
-
-        <Text style={[styles.summaryTitle, { color: iosColor('secondaryLabel', '#8E8E93') }]}>RESUMEN TOTAL</Text>
-        <View style={[styles.summaryCard, { backgroundColor: iosColor('secondarySystemGroupedBackground', '#FFF') }]}>
-          {aggregate.map((entry) => (
-            <View key={entry.recipe?.id} style={[styles.summaryRow, { borderBottomColor: iosColor('separator', '#C6C6C8') }]}>
-              <Text style={styles.recipeEmoji}>{entry.recipe?.emoji || '🍽️'}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.recipeName, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{entry.recipe?.name}</Text>
-                <Text style={[styles.recipeMeta, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-                  {entry.totalServings} porciones en total · {entry.consumerCount} consumidores
-                </Text>
-              </View>
-            </View>
-          ))}
-          {!aggregate.length ? (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.recipeMeta, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-                No hay pedidos para esta semana.
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {!consumers.length ? (
-          <Text style={[styles.emptyInfo, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-            Todavía no tenés consumidores vinculados.
-          </Text>
-        ) : null}
-      </ScrollView>
+        }}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyTitle, { color: iosColor('label', colors.label) }]}>
+              {isLoading ? 'Cargando pedidos…' : error ? 'Error al cargar pedidos' : 'No hay pedidos esta semana'}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+              {error ? error : 'Cuando tus clientes planifiquen comidas, aparecerán aquí.'}
+            </Text>
+            {error ? (
+              <Pressable style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={() => void onRefresh()}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
-  headerRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  chevronButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  chevronText: { fontSize: 30, lineHeight: 30, fontWeight: '500' },
-  weekTitle: { fontSize: 17, fontWeight: '600' },
-  shareButton: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  shareText: { marginLeft: 6, fontSize: 15, fontWeight: '600' },
-  card: { borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
-  cardHeader: { minHeight: 66, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  consumerName: { fontSize: 16, fontWeight: '600' },
-  consumerMeta: { marginTop: 2, fontSize: 13 },
-  cardBody: { paddingHorizontal: 12, paddingBottom: 12 },
-  recipeRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center' },
-  recipeEmoji: { fontSize: 22, marginRight: 9 },
-  recipeName: { fontSize: 15, fontWeight: '600' },
-  recipeMeta: { marginTop: 2, fontSize: 12 },
-  summaryTitle: { fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6, paddingHorizontal: 4 },
-  summaryCard: { borderRadius: 12, overflow: 'hidden' },
-  summaryRow: {
-    minHeight: 54,
+  headerRow: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  emptyInfo: { marginTop: 14, fontSize: 14 },
+  chevronButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  chevronText: { fontSize: 30, lineHeight: 30, fontWeight: '500' },
+  weekTitle: { fontSize: 17, fontWeight: '700' },
+  content: { paddingHorizontal: 16, paddingBottom: 120, paddingTop: 8 },
+  listHeader: {
+    marginBottom: 12,
+  },
+  screenTitle: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    marginBottom: 4,
+  },
+  screenSubtitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+
+  customerCard: {
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: lightTheme.colors.label,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  customerHeader: {
+    minHeight: 74,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  customerInfo: {
+    flex: 1,
+  },
+  customerName: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+  },
+  customerTotals: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+
+  customerBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  dayGroup: {
+    paddingTop: 8,
+  },
+  dayGroupBorder: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: lightTheme.colors.separator,
+  },
+  dayTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  dishRow: {
+    minHeight: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dishRowGap: {
+    marginTop: 2,
+  },
+  dishBullet: {
+    marginRight: 8,
+    fontSize: 18,
+    lineHeight: 18,
+  },
+  dishText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+
+  noOrdersRow: {
+    paddingTop: 2,
+  },
+  noOrdersText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+
+  emptyWrap: {
+    paddingTop: 56,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 12,
+    minHeight: 38,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: lightTheme.colors.card,
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

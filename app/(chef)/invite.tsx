@@ -9,7 +9,6 @@ import {
   Alert,
   Modal,
   Platform,
-  PlatformColor,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -18,14 +17,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { lightTheme, useTheme } from '../../lib/theme';
 import { useInviteStore } from '../../lib/stores/inviteStore';
 import { PlanItemWithRecipe, startOfWeekMonday, toISODate } from '../../lib/stores/consumerStore';
 import { ConsumerWithProfile, useChefDashboardStore } from '../../lib/stores/chefDashboardStore';
+import { useAuthStore } from '../../lib/stores/authStore';
 import { supabase } from '../../lib/supabase';
-
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
-}
 
 const dayNames: Record<string, string> = {
   mon: 'Lunes',
@@ -48,7 +45,8 @@ function statusForCode(code: { max_uses: number; uses_count: number; expires_at:
 }
 
 export default function ChefInviteScreen() {
-  const isDark = false;
+  const { colors, scheme } = useTheme();
+  const userId = useAuthStore((s) => s.session?.user?.id);
   const { codes, fetchCodes, createCode, deleteCode } = useInviteStore();
   const consumers = useChefDashboardStore((s) => s.consumers);
   const fetchConsumers = useChefDashboardStore((s) => s.fetchConsumers);
@@ -57,6 +55,7 @@ export default function ChefInviteScreen() {
   const [consumerItems, setConsumerItems] = useState<PlanItemWithRecipe[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingUses, setPendingUses] = useState<number | null>(null);
+  const [removingById, setRemovingById] = useState<Record<string, boolean>>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +105,49 @@ export default function ChefInviteScreen() {
       recipe: item.recipes ?? null,
     }));
     setConsumerItems(normalized);
+  };
+
+  const unlinkConsumer = async (consumer: ConsumerWithProfile) => {
+    if (!userId) {
+      Alert.alert('Sesión no disponible', 'Volvé a iniciar sesión e intentá nuevamente.');
+      return;
+    }
+
+    Alert.alert(
+      'Eliminar consumidor',
+      `¿Querés desvincular a ${consumer.displayName} de tu tutela?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setRemovingById((prev) => ({ ...prev, [consumer.consumerId]: true }));
+              const { error } = await supabase
+                .from('chef_consumers')
+                .delete()
+                .eq('chef_id', userId)
+                .eq('consumer_id', consumer.consumerId);
+
+              if (error) {
+                Alert.alert('No se pudo eliminar', error.message);
+                return;
+              }
+
+              if (selectedConsumer?.consumerId === consumer.consumerId) {
+                setSelectedConsumer(null);
+                setConsumerItems([]);
+              }
+              await fetchConsumers();
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } finally {
+              setRemovingById((prev) => ({ ...prev, [consumer.consumerId]: false }));
+            }
+          },
+        },
+      ]
+    );
   };
 
   const createAndShare = async (maxUses: number, expiresAt: Date | null) => {
@@ -185,45 +227,65 @@ export default function ChefInviteScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', isDark ? '#000' : '#F2F2F7') }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Invitaciones</Text>
+        <Text style={[styles.title, { color: colors.label }]}>Invitaciones</Text>
 
-        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', '#8E8E93') }]}>CONSUMIDORES VINCULADOS</Text>
-        <View style={[styles.group, { backgroundColor: iosColor('secondarySystemGroupedBackground', '#FFF') }]}>
+        <Text style={[styles.sectionLabel, { color: colors.secondaryLabel }]}>CONSUMIDORES VINCULADOS</Text>
+        <View style={[styles.group, { backgroundColor: colors.card }]}>
           {consumers.map((consumer, idx) => (
-            <Pressable
+            <View
               key={consumer.consumerId}
-              onPress={() => void openConsumerSheet(consumer)}
-              style={[styles.row, idx < consumers.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iosColor('separator', '#C6C6C8') } : null]}
+              style={[styles.row, idx < consumers.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.separator } : null]}
             >
-              <View style={[styles.avatar, { backgroundColor: 'rgba(0,122,255,0.15)' }]}>
-                <Text style={[styles.avatarText, { color: iosColor('systemBlue', '#007AFF') }]}>
-                  {consumer.displayName.slice(0, 2).toUpperCase()}
+              <Pressable
+                onPress={() => void openConsumerSheet(consumer)}
+                style={styles.consumerInfoButton}
+              >
+                <View style={[styles.avatar, { backgroundColor: 'rgba(0,122,255,0.15)' }]}>
+                  <Text style={[styles.avatarText, { color: colors.primary }]}>
+                    {consumer.displayName.slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowTitle, { color: colors.label }]}>{consumer.displayName}</Text>
+                  <Text style={[styles.rowSubtitle, { color: colors.secondaryLabel }]}>
+                    Vinculado {consumer.linkedAt ? new Date(consumer.linkedAt).toLocaleDateString('es-UY') : '—'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.tertiaryLabel} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => void unlinkConsumer(consumer)}
+                disabled={Boolean(removingById[consumer.consumerId])}
+                style={({ pressed }) => [
+                  styles.unlinkButton,
+                  { backgroundColor: colors.danger },
+                  pressed && { opacity: 0.88 },
+                  removingById[consumer.consumerId] && { opacity: 0.6 },
+                ]}
+              >
+                <Ionicons name="trash-outline" size={14} color={colors.card} />
+                <Text style={styles.unlinkButtonText}>
+                  {removingById[consumer.consumerId] ? 'Eliminando…' : 'Eliminar'}
                 </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.rowTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{consumer.displayName}</Text>
-                <Text style={[styles.rowSubtitle, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
-                  Vinculado {consumer.linkedAt ? new Date(consumer.linkedAt).toLocaleDateString('es-UY') : '—'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={iosColor('tertiaryLabel', '#C7C7CC')} />
-            </Pressable>
+              </Pressable>
+            </View>
           ))}
           {!consumers.length ? (
             <View style={styles.emptyBlock}>
-              <Ionicons name="person-add-outline" size={26} color={iosColor('secondaryLabel', '#8E8E93')} />
-              <Text style={[styles.emptyText, { color: iosColor('secondaryLabel', '#8E8E93') }]}>Todavía no tenés consumidores vinculados</Text>
+              <Ionicons name="person-add-outline" size={26} color={colors.secondaryLabel} />
+              <Text style={[styles.emptyText, { color: colors.secondaryLabel }]}>Todavía no tenés consumidores vinculados</Text>
             </View>
           ) : null}
         </View>
 
-        <Text style={[styles.sectionLabel, { color: iosColor('secondaryLabel', '#8E8E93') }]}>CÓDIGOS DE INVITACIÓN</Text>
-        <Pressable style={[styles.outlineButton, { borderColor: iosColor('systemBlue', '#007AFF') }]} onPress={openGenerateSheet}>
-          <Text style={[styles.outlineButtonText, { color: iosColor('systemBlue', '#007AFF') }]}>Generar código</Text>
+        <Text style={[styles.sectionLabel, { color: colors.secondaryLabel }]}>CÓDIGOS DE INVITACIÓN</Text>
+        <Pressable style={[styles.outlineButton, { borderColor: colors.primary }]} onPress={openGenerateSheet}>
+          <Text style={[styles.outlineButtonText, { color: colors.primary }]}>Generar código</Text>
         </Pressable>
-        <View style={[styles.group, { backgroundColor: iosColor('secondarySystemGroupedBackground', '#FFF') }]}>
+        <View style={[styles.group, { backgroundColor: colors.card }]}>
           {sortedCodes.map((code, idx) => {
             const status = statusForCode(code);
             const canDelete = code.uses_count === 0;
@@ -231,18 +293,18 @@ export default function ChefInviteScreen() {
               <View
                 style={[
                   styles.codeRow,
-                  idx < sortedCodes.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iosColor('separator', '#C6C6C8') } : null,
+                  idx < sortedCodes.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.separator } : null,
                 ]}
               >
-                <Text style={[styles.codeText, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{code.code}</Text>
+                <Text style={[styles.codeText, { color: colors.label }]}>{code.code}</Text>
                 <View style={styles.codeMeta}>
-                  <View style={[styles.usageBadge, { backgroundColor: iosColor('tertiarySystemBackground', '#EFEFF4') }]}>
-                    <Text style={[styles.usageBadgeText, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
+                  <View style={[styles.usageBadge, { backgroundColor: colors.background }]}>
+                    <Text style={[styles.usageBadgeText, { color: colors.secondaryLabel }]}>
                       {code.uses_count}/{code.max_uses}
                     </Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                    <Text style={[styles.statusText, { color: iosColor(status.colorName, status.fallback) }]}>{status.label}</Text>
+                    <Text style={[styles.statusText, { color: status.fallback }]}>{status.label}</Text>
                   </View>
                 </View>
               </View>
@@ -254,7 +316,7 @@ export default function ChefInviteScreen() {
                 {row}
                 <View style={styles.codeActionsRow}>
                   <Pressable
-                    style={[styles.inlineDeleteButton, { backgroundColor: iosColor('systemRed', '#FF3B30') }]}
+                    style={[styles.inlineDeleteButton, { backgroundColor: colors.danger }]}
                     onPress={async () => {
                       await deleteCode(code.id);
                     }}
@@ -267,36 +329,36 @@ export default function ChefInviteScreen() {
           })}
           {!sortedCodes.length ? (
             <View style={styles.emptyBlock}>
-              <Text style={[styles.emptyText, { color: iosColor('secondaryLabel', '#8E8E93') }]}>No hay códigos creados todavía.</Text>
+              <Text style={[styles.emptyText, { color: colors.secondaryLabel }]}>No hay códigos creados todavía.</Text>
             </View>
           ) : null}
         </View>
       </ScrollView>
 
       <Modal visible={!!selectedConsumer} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedConsumer(null)}>
-        <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', isDark ? '#000' : '#FFF') }]}>
+        <SafeAreaView style={[styles.safe, { backgroundColor: colors.card }]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>
+            <Text style={[styles.modalTitle, { color: colors.label }]}>
               {selectedConsumer?.displayName || 'Consumidor'}
             </Text>
             <Pressable onPress={() => setSelectedConsumer(null)}>
-              <Text style={{ color: iosColor('systemBlue', '#007AFF'), fontSize: 17 }}>Cerrar</Text>
+              <Text style={{ color: colors.primary, fontSize: 17 }}>Cerrar</Text>
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}>
             {consumerItems.map((item) => (
-              <View key={item.id} style={[styles.modalRow, { borderBottomColor: iosColor('separator', '#C6C6C8') }]}>
+              <View key={item.id} style={[styles.modalRow, { borderBottomColor: colors.separator }]}>
                 <Text style={styles.modalEmoji}>{item.recipe?.emoji || '🍽️'}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalRecipe, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{item.recipe?.name || 'Receta'}</Text>
-                  <Text style={[styles.modalMeta, { color: iosColor('secondaryLabel', '#8E8E93') }]}>
+                  <Text style={[styles.modalRecipe, { color: colors.label }]}>{item.recipe?.name || 'Receta'}</Text>
+                  <Text style={[styles.modalMeta, { color: colors.secondaryLabel }]}>
                     {item.days.map((d) => dayNames[d] || d).join(', ')} · {item.servings} porciones
                   </Text>
                 </View>
               </View>
             ))}
             {!consumerItems.length ? (
-              <Text style={[styles.emptyText, { color: iosColor('secondaryLabel', '#8E8E93'), marginTop: 24 }]}>
+              <Text style={[styles.emptyText, { color: colors.secondaryLabel, marginTop: 24 }]}>
                 Sin recetas asignadas esta semana.
               </Text>
             ) : null}
@@ -328,10 +390,21 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: '600', marginTop: 16, marginBottom: 6, paddingHorizontal: 4 },
   group: { borderRadius: 12, overflow: 'hidden' },
   row: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+  consumerInfoButton: { flex: 1, minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingRight: 10 },
   avatar: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   avatarText: { fontSize: 14, fontWeight: '700' },
   rowTitle: { fontSize: 16, fontWeight: '600' },
   rowSubtitle: { marginTop: 2, fontSize: 12 },
+  unlinkButton: {
+    minHeight: 32,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+  },
+  unlinkButtonText: { color: lightTheme.colors.card, fontSize: 12, fontWeight: '700' },
   emptyBlock: { minHeight: 74, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   emptyText: { fontSize: 14, textAlign: 'center' },
   outlineButton: {
@@ -352,7 +425,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '600' },
   codeActionsRow: { paddingHorizontal: 12, paddingBottom: 8 },
   inlineDeleteButton: { minHeight: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  deleteActionText: { color: '#FFF', fontWeight: '700' },
+  deleteActionText: { color: lightTheme.colors.card, fontWeight: '700' },
   modalHeader: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   modalTitle: { fontSize: 20, fontWeight: '700' },
   modalRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },

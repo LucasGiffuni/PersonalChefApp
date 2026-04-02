@@ -1,318 +1,256 @@
-import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
-  Image,
-  Platform,
-  PlatformColor,
-  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  useColorScheme,
+  Platform,
 } from 'react-native';
-import { useConsumerStore } from '../../../lib/stores/consumerStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useConsumerStore, type Recipe } from '../../../lib/stores/consumerStore';
+import { useTheme } from '../../../lib/theme';
+import { Input } from '../../../lib/ui';
+import { RecipeCard, RecipeCardSkeleton } from './components/RecipeCard';
 
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
-}
+type MenuListItem =
+  | { type: 'recipe'; item: Recipe }
+  | { type: 'skeleton'; id: string };
 
-type CategoryChipProps = {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-};
+const SKELETON_ITEMS: MenuListItem[] = Array.from({ length: 4 }, (_, index) => ({
+  type: 'skeleton',
+  id: `skeleton-${index}`,
+}));
 
-function CategoryChip({ label, active, onPress }: CategoryChipProps) {
-  const isDark = useColorScheme() === 'dark';
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: active
-            ? iosColor('systemBlue', '#007AFF')
-            : iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7'),
-        },
-      ]}
-    >
-      <Text style={[styles.chipText, { color: active ? '#FFFFFF' : iosColor('label', isDark ? '#FFF' : '#000') }]}>{label}</Text>
-    </Pressable>
-  );
-}
+const HEADER_HEIGHT = 52;
 
 export default function ConsumerMenuScreen() {
-  const isDark = useColorScheme() === 'dark';
+  const { colors, radius, typography, scheme, shadows } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+
   const recipes = useConsumerStore((s) => s.recipes);
+  const chefId = useConsumerStore((s) => s.chefId);
   const chefName = useConsumerStore((s) => s.chefName);
-  const planItems = useConsumerStore((s) => s.planItems);
 
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string>('Todas');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const categories = useMemo(() => {
-    const base = ['Todas'];
-    const fromRecipes = Array.from(new Set(recipes.map((r) => r.cat).filter(Boolean))) as string[];
-    return [...base, ...fromRecipes];
-  }, [recipes]);
+  useEffect(() => {
+    if (recipes.length > 0) {
+      setIsInitialLoading(false);
+      return;
+    }
 
-  const filtered = useMemo(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoading(false);
+    }, 850);
+
+    return () => clearTimeout(timer);
+  }, [recipes.length]);
+
+  const filteredRecipes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
+    if (!normalized) return recipes;
+
     return recipes.filter((recipe) => {
-      const matchesCategory = category === 'Todas' || recipe.cat === category;
-      if (!matchesCategory) return false;
-      if (!normalized) return true;
-      return recipe.name.toLowerCase().includes(normalized);
+      const byName = recipe.name.toLowerCase().includes(normalized);
+      const byCategory = String(recipe.cat ?? '')
+        .toLowerCase()
+        .includes(normalized);
+      return byName || byCategory;
     });
-  }, [category, query, recipes]);
+  }, [query, recipes]);
 
-  const inWeekRecipeIds = useMemo(() => new Set(planItems.map((i) => i.recipe_id)), [planItems]);
+  const isLoading = Boolean(chefId) && recipes.length === 0 && isInitialLoading;
 
-  const collapsedTitleOpacity = scrollY.interpolate({
-    inputRange: [0, 36, 64],
-    outputRange: [0, 0.5, 1],
+  const listData = useMemo<MenuListItem[]>(() => {
+    if (isLoading) return SKELETON_ITEMS;
+    return filteredRecipes.map((item) => ({ type: 'recipe', item }));
+  }, [filteredRecipes, isLoading]);
+
+  const onPressRecipe = useCallback(
+    (id: number) => {
+      router.push(`/(consumer)/menu/${id}`);
+    },
+    [router]
+  );
+
+  const compactHeaderOpacity = scrollY.interpolate({
+    inputRange: [40, 92],
+    outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
   const largeTitleOpacity = scrollY.interpolate({
-    inputRange: [0, 40],
+    inputRange: [0, 38],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', isDark ? '#000' : '#FFF') }]}>
-      <Animated.View
-        style={[
-          styles.inlineHeader,
-          {
-            backgroundColor: iosColor('systemBackground', isDark ? '#000' : '#FFF'),
-            borderBottomColor: iosColor('separator', isDark ? '#3A3A3C' : '#C6C6C8'),
-            opacity: collapsedTitleOpacity,
-          },
-        ]}
-      >
-        <Text style={[styles.inlineTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>
-          Menú de {chefName ?? 'tu chef'}
-        </Text>
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      <Animated.View style={[styles.compactHeaderWrap, { paddingTop: insets.top, opacity: compactHeaderOpacity }]} pointerEvents="none">
+        <BlurView intensity={75} tint={scheme === 'dark' ? 'dark' : 'light'} style={[styles.compactHeaderBlur, { borderBottomColor: colors.separator }]}>
+          <Text style={[styles.compactHeaderTitle, { color: colors.label }]}>Menú del chef</Text>
+        </BlurView>
       </Animated.View>
 
       <Animated.FlatList
-        data={filtered}
-        keyExtractor={(item) => String(item.id)}
-        numColumns={2}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.column}
+        data={listData}
+        keyExtractor={(row) => (row.type === 'skeleton' ? row.id : String(row.item.id))}
+        renderItem={({ item }) => {
+          if (item.type === 'skeleton') {
+            return <RecipeCardSkeleton />;
+          }
+
+          return <RecipeCard recipe={item.item} onPress={onPressRecipe} />;
+        }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
           useNativeDriver: false,
         })}
         scrollEventThrottle={16}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS === 'android'}
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
+        windowSize={8}
+        contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + HEADER_HEIGHT }]}
         ListHeaderComponent={
-          <View>
-            <Animated.Text style={[styles.largeTitle, { color: iosColor('label', isDark ? '#FFF' : '#000'), opacity: largeTitleOpacity }]}>
-              Menú de {chefName ?? 'tu chef'}
-            </Animated.Text>
+          <View style={styles.headerBlock}>
+            <Animated.Text style={[styles.largeTitle, { color: colors.label, opacity: largeTitleOpacity, ...typography.title }]}>Menú del chef</Animated.Text>
+            {chefName ? (
+              <Text style={[styles.subtitle, { color: colors.secondaryLabel }]} numberOfLines={1}>
+                Seleccioná tu próximo plato de {chefName}
+              </Text>
+            ) : null}
 
-            <View style={[styles.searchWrap, { backgroundColor: iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7') }]}>
-              <Ionicons name="search" size={16} color={iosColor('secondaryLabel', '#8E8E93')} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Buscar recetas"
-                placeholderTextColor={iosColor('tertiaryLabel', '#8E8E93')}
-                style={[styles.searchInput, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}
-              />
-            </View>
-
-            <FlatList
-              horizontal
-              data={categories}
-              keyExtractor={(item) => item}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsWrap}
-              renderItem={({ item }) => (
-                <CategoryChip
-                  label={item}
-                  active={item === category}
-                  onPress={async () => {
-                    setCategory(item);
-                    await Haptics.selectionAsync();
-                  }}
-                />
-              )}
+            <Input
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Buscar platos"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              icon={<Ionicons name="search" size={18} color={colors.secondaryLabel} />}
+              containerStyle={[styles.searchWrap, shadows.card, { backgroundColor: colors.card, borderRadius: radius.medium + 6 }]}
             />
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyEmoji}>🍽️</Text>
-            <Text style={[styles.emptyTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>
-              Tu chef aún no publicó recetas
+            <View
+              style={[
+                styles.emptyIconCircle,
+                { backgroundColor: colors.card },
+              ]}
+            >
+              <Ionicons name="restaurant-outline" size={30} color={colors.secondaryLabel} />
+            </View>
+
+            <Text style={[styles.emptyTitle, { color: colors.label }]}>
+              {query.trim() ? 'No encontramos platos con ese nombre' : 'Todavía no hay platos disponibles'}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.secondaryLabel }]}>
+              {query.trim()
+                ? 'Probá ajustando la búsqueda para descubrir más opciones.'
+                : 'Tu chef va a publicar nuevas recetas muy pronto.'}
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const inWeek = inWeekRecipeIds.has(item.id);
-          return (
-            <Pressable style={styles.card} onPress={() => router.push(`/(consumer)/menu/${item.id}`)}>
-              {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.cardImage} resizeMode="cover" />
-              ) : (
-                <View
-                  style={[
-                    styles.cardImageFallback,
-                    { backgroundColor: iosColor('tertiarySystemBackground', isDark ? '#2C2C2E' : '#FFFFFF') },
-                  ]}
-                >
-                  <Text style={styles.fallbackEmoji}>{item.emoji || '🍽️'}</Text>
-                </View>
-              )}
-
-              <View style={styles.cardBody}>
-                <Text style={[styles.cardTitle, { color: iosColor('label', isDark ? '#FFF' : '#000') }]} numberOfLines={2}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.cardCategory, { color: iosColor('secondaryLabel', '#8E8E93') }]} numberOfLines={1}>
-                  {item.cat || 'Sin categoría'}
-                </Text>
-                {inWeek ? (
-                  <View style={[styles.badge, { backgroundColor: iosColor('systemGreen', '#34C759') }]}>
-                    <Ionicons name="checkmark" size={12} color="#FFF" />
-                    <Text style={styles.badgeText}>En mi semana</Text>
-                  </View>
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        }}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  inlineHeader: {
+  safe: {
+    flex: 1,
+  },
+  compactHeaderWrap: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
-    height: 56,
+    zIndex: 20,
+  },
+  compactHeaderBlur: {
+    height: HEADER_HEIGHT,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  inlineTitle: {
+  compactHeaderTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    lineHeight: 22,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  listContent: {
-    paddingTop: 8,
-    paddingBottom: 120,
+  contentContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 140,
+  },
+  headerBlock: {
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   largeTitle: {
-    fontSize: 34,
-    fontWeight: '700',
-    marginBottom: 12,
-    marginTop: 10,
+    fontSize: 38,
+    lineHeight: 42,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+  },
+  subtitle: {
+    marginTop: 8,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   searchWrap: {
-    minHeight: 40,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    minHeight: 40,
-  },
-  chipsWrap: {
-    paddingVertical: 12,
-    paddingRight: 16,
-  },
-  chip: {
+    marginTop: 16,
+    minHeight: 52,
+    borderRadius: 18,
     paddingHorizontal: 14,
-    height: 34,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  column: {
-    justifyContent: 'space-between',
-  },
-  card: {
-    width: '48%',
-    marginBottom: 14,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-  },
-  cardImageFallback: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackEmoji: {
-    fontSize: 34,
-  },
-  cardBody: {
-    paddingTop: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cardCategory: {
-    fontSize: 12,
-    marginTop: 3,
-  },
-  badge: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    minHeight: 20,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
   },
   emptyWrap: {
-    marginTop: 80,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 56,
   },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 8,
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 21,
+    lineHeight: 26,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
   },
 });

@@ -11,17 +11,17 @@ import {
   Text,
   TextInput,
   View,
-  useColorScheme,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/stores/authStore';
+import { useTheme } from '../../lib/theme';
 
 function iosColor(name: string, fallback: string) {
   return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
 }
 
 export default function RegisterChefScreen() {
-  const isDark = useColorScheme() === 'dark';
+  const { colors, spacing } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -77,10 +77,10 @@ export default function RegisterChefScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', isDark ? '#000' : '#FFF') }]}>
-      <View style={styles.container}>
-        <Text style={[styles.title, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Crear cuenta</Text>
-        <Text style={[styles.subtitle, { color: iosColor('secondaryLabel', isDark ? '#A0A0A0' : '#6B6B6B') }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', colors.background) }]}>
+      <View style={[styles.container, { paddingHorizontal: spacing.lg, paddingTop: spacing.lg }]}>
+        <Text style={[styles.title, { color: iosColor('label', colors.label) }]}>Crear cuenta</Text>
+        <Text style={[styles.subtitle, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
           Registro para chefs
         </Text>
 
@@ -88,14 +88,14 @@ export default function RegisterChefScreen() {
           value={email}
           onChangeText={setEmail}
           placeholder="Email"
-          placeholderTextColor={iosColor('tertiaryLabel', '#8A8A8E')}
+          placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
           autoCapitalize="none"
           keyboardType="email-address"
           style={[
             styles.input,
             {
-              backgroundColor: iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7'),
-              color: iosColor('label', isDark ? '#FFF' : '#000'),
+              backgroundColor: iosColor('secondarySystemBackground', colors.fill),
+              color: iosColor('label', colors.label),
             },
           ]}
         />
@@ -104,13 +104,13 @@ export default function RegisterChefScreen() {
           value={password}
           onChangeText={setPassword}
           placeholder="Contraseña"
-          placeholderTextColor={iosColor('tertiaryLabel', '#8A8A8E')}
+          placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
           secureTextEntry
           style={[
             styles.input,
             {
-              backgroundColor: iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7'),
-              color: iosColor('label', isDark ? '#FFF' : '#000'),
+              backgroundColor: iosColor('secondarySystemBackground', colors.fill),
+              color: iosColor('label', colors.label),
             },
           ]}
         />
@@ -119,13 +119,13 @@ export default function RegisterChefScreen() {
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           placeholder="Confirmar contraseña"
-          placeholderTextColor={iosColor('tertiaryLabel', '#8A8A8E')}
+          placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
           secureTextEntry
           style={[
             styles.input,
             {
-              backgroundColor: iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7'),
-              color: iosColor('label', isDark ? '#FFF' : '#000'),
+              backgroundColor: iosColor('secondarySystemBackground', colors.fill),
+              color: iosColor('label', colors.label),
             },
           ]}
         />
@@ -136,17 +136,17 @@ export default function RegisterChefScreen() {
           style={({ pressed }) => [
             styles.primaryButton,
             {
-              backgroundColor: '#007AFF',
+              backgroundColor: colors.primary,
               opacity: pressed || loading ? 0.85 : 1,
             },
           ]}
         >
-          <Text style={styles.primaryButtonText}>{loading ? 'Creando...' : 'Crear cuenta de chef'}</Text>
+          <Text style={[styles.primaryButtonText, { color: colors.card }]}>{loading ? 'Creando...' : 'Crear cuenta de chef'}</Text>
         </Pressable>
 
         <Link href="/login" asChild>
           <Pressable style={styles.linkWrap}>
-            <Text style={[styles.link, { color: iosColor('systemBlue', '#007AFF') }]}>Ya tengo cuenta</Text>
+            <Text style={[styles.link, { color: iosColor('systemBlue', colors.primary) }]}>Ya tengo cuenta</Text>
           </Pressable>
         </Link>
       </View>
@@ -187,7 +187,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
   },

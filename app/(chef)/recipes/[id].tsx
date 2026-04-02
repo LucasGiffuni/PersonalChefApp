@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { RecipeForm, RecipeFormData, RecipeFormIngredient } from './_form';
 import { supabase } from '../../../lib/supabase';
+import { useTheme } from '../../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ type RecipeEditData = {
   time: string | null;
   difficulty: string | null;
   servings: number | null;
+  base_price?: number | null;
   photo_url: string | null;
   ingredients: any[] | null;
   steps: string[] | null;
@@ -22,9 +24,6 @@ type RecipeEditData = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const BG = '#f2f2f7';
-const BLUE = '#007AFF';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,13 +89,14 @@ function normalizeIngredients(input: any[] | null): RecipeFormIngredient[] {
 
 export default function EditRecipeScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const recipeId = Number(id);
 
   const [recipe, setRecipe] = useState<RecipeEditData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const onCancel = () => router.back();
+  const onCancel = () => router.replace('/(chef)/recipes');
 
   useEffect(() => {
     let active = true;
@@ -142,6 +142,7 @@ export default function EditRecipeScreen() {
       time: recipe.time ?? '',
       difficulty: normalizeDifficulty(recipe.difficulty),
       servings: recipe.servings ?? 4,
+      base_price: Number((recipe as any).base_price ?? 0) || 0,
       photo_url: recipe.photo_url ?? '',
       is_published: !!recipe.is_published,
       ingredients: normalizeIngredients(recipe.ingredients),
@@ -158,7 +159,7 @@ export default function EditRecipeScreen() {
       if (uploaded) finalPhotoUrl = uploaded;
     }
 
-    const { error } = await supabase.from('recipes').update({
+    const payload = {
       name: value.name,
       cat: value.cat || null,
       emoji: value.emoji,
@@ -166,6 +167,7 @@ export default function EditRecipeScreen() {
       time: value.time || null,
       difficulty: value.difficulty || null,
       servings: value.servings,
+      base_price: Number(value.base_price) || 0,
       photo_url: finalPhotoUrl,
       ingredients: value.ingredients.map((item) => ({
         id: item.id,
@@ -184,7 +186,15 @@ export default function EditRecipeScreen() {
       })),
       steps: value.steps,
       is_published: value.is_published,
-    }).eq('id', recipe.id);
+    };
+
+    let { error } = await supabase.from('recipes').update(payload).eq('id', recipe.id);
+    if (error && String(error.message ?? '').toLowerCase().includes('base_price')) {
+      const fallbackPayload = { ...payload } as any;
+      delete fallbackPayload.base_price;
+      const fallbackResult = await supabase.from('recipes').update(fallbackPayload).eq('id', recipe.id);
+      error = fallbackResult.error;
+    }
 
     if (error) {
       Alert.alert('No se pudo actualizar', error.message);
@@ -197,12 +207,12 @@ export default function EditRecipeScreen() {
   // ── Estado: cargando ──
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
-        <Pressable onPress={onCancel} style={{ position: 'absolute', top: 20, left: 16 }} hitSlop={8}>
-          <Text style={{ color: BLUE, fontSize: 17 }}>Volver</Text>
-        </Pressable>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={BLUE} />
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Pressable onPress={onCancel} style={{ marginTop: 14 }} hitSlop={8}>
+            <Text style={{ color: colors.primary, fontSize: 16 }}>Cancelar</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -211,10 +221,10 @@ export default function EditRecipeScreen() {
   // ── Estado: no encontrada ──
   if (!recipe || !initialValues) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG, paddingHorizontal: 24 }}>
-        <Text style={{ color: '#000000', fontSize: 16, fontWeight: '600' }}>Receta no encontrada</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, paddingHorizontal: 24 }}>
+        <Text style={{ color: colors.label, fontSize: 16, fontWeight: '600' }}>Receta no encontrada</Text>
         <Pressable onPress={onCancel} style={{ marginTop: 12 }}>
-          <Text style={{ color: BLUE, fontSize: 16 }}>Volver</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>Volver</Text>
         </Pressable>
       </View>
     );

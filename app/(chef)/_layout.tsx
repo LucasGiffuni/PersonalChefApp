@@ -2,27 +2,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, PlatformColor, StyleSheet } from 'react-native';
-
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
-}
+import { StyleSheet } from 'react-native';
+import { useTheme } from '../../lib/theme';
 
 export default function ChefLayout() {
-  const isDark = false;
+  const { scheme, colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: iosColor('systemBlue', '#007AFF'),
-        tabBarInactiveTintColor: iosColor('secondaryLabel', '#8E8E93'),
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.secondaryLabel,
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 0,
           backgroundColor: 'transparent',
         },
-        tabBarBackground: () => <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />,
+        tabBarBackground: () => (
+          <BlurView
+            intensity={80}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={[StyleSheet.absoluteFill, styles.tabBarBg, { borderTopColor: colors.tabBarBorder }]}
+          />
+        ),
       }}
     >
       <Tabs.Screen
@@ -51,3 +54,9 @@ export default function ChefLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarBg: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+});

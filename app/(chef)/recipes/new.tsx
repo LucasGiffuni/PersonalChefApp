@@ -40,6 +40,7 @@ export default function NewRecipeScreen() {
       time: value.time || null,
       difficulty: value.difficulty || null,
       servings: value.servings,
+      base_price: Number(value.base_price) || 0,
       photo_url: value.photo_url || null,
       ingredients: value.ingredients.map((item) => ({
         id: item.id,
@@ -60,11 +61,25 @@ export default function NewRecipeScreen() {
       is_published: value.is_published,
     };
 
-    const { data: inserted, error } = await supabase
+    let inserted: { id: number } | null = null;
+    let error: any = null;
+
+    const firstTry = await supabase
       .from('recipes')
       .insert(payload)
       .select('id')
       .single();
+
+    inserted = firstTry.data as any;
+    error = firstTry.error;
+
+    if (error && String(error.message ?? '').toLowerCase().includes('base_price')) {
+      const fallbackPayload = { ...payload } as any;
+      delete fallbackPayload.base_price;
+      const secondTry = await supabase.from('recipes').insert(fallbackPayload).select('id').single();
+      inserted = secondTry.data as any;
+      error = secondTry.error;
+    }
 
     if (error) {
       Alert.alert('No se pudo guardar', error.message);
@@ -81,7 +96,7 @@ export default function NewRecipeScreen() {
     router.replace('/(chef)/recipes');
   };
 
-  const onCancel = () => router.back();
+  const onCancel = () => router.replace('/(chef)/recipes');
 
   return <RecipeForm onSave={onSave} onCancel={onCancel} />;
 }

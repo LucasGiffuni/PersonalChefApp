@@ -20,6 +20,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/stores/authStore';
 import { useInviteStore } from '../../lib/stores/inviteStore';
+import { lightTheme, useTheme } from '../../lib/theme';
 
 function iosColor(name: string, fallback: string) {
   return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
@@ -49,6 +50,7 @@ function FieldRow({
   isLast = false,
 }: FieldRowProps) {
   const isDark = useColorScheme() === 'dark';
+  const { colors } = useTheme();
 
   return (
     <View
@@ -56,21 +58,21 @@ function FieldRow({
         styles.row,
         {
           borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: iosColor('separator', isDark ? '#3A3A3C' : '#C6C6C8'),
+          borderBottomColor: iosColor('separator', colors.separator),
         },
       ]}
     >
-      <Text style={[styles.rowLabel, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>{label}</Text>
+      <Text style={[styles.rowLabel, { color: iosColor('label', colors.label) }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={iosColor('tertiaryLabel', '#8A8A8E')}
+        placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         editable={editable}
-        style={[styles.rowInput, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}
+        style={[styles.rowInput, { color: iosColor('label', colors.label) }]}
       />
     </View>
   );
@@ -78,6 +80,7 @@ function FieldRow({
 
 export default function InviteRegisterScreen() {
   const isDark = useColorScheme() === 'dark';
+  const { colors } = useTheme();
   const validateCode = useInviteStore((s) => s.validateCode);
   const redeemCode = useInviteStore((s) => s.redeemCode);
   const fetchRole = useAuthStore((s) => s.fetchRole);
@@ -191,11 +194,11 @@ export default function InviteRegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', isDark ? '#000' : '#FFF') }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', colors.background) }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.safe}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.container}>
-            <Text style={[styles.title, { color: iosColor('label', isDark ? '#FFF' : '#000') }]}>Registro por invitación</Text>
+            <Text style={[styles.title, { color: iosColor('label', colors.label) }]}>Registro por invitación</Text>
             <Text style={[styles.subtitle, { color: iosColor('secondaryLabel', isDark ? '#A0A0A0' : '#6B6B6B') }]}>
               Ingresá tus datos para crear cuenta de consumidor.
             </Text>
@@ -346,7 +349,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: lightTheme.colors.card,
     fontSize: 17,
     fontWeight: '600',
   },
