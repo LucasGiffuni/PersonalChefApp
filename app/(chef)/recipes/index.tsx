@@ -19,7 +19,7 @@ import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../lib/stores/authStore';
 import { useTheme } from '../../../lib/theme';
 import { Recipe } from '../../../lib/types';
-import { RecipeCardChef } from './components/RecipeCardChef';
+import { RecipeCardChef } from '../../../lib/ui/chef/RecipeCardChef';
 
 type FilterKey = 'all' | 'published' | 'draft';
 

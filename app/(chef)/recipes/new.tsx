@@ -2,25 +2,9 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert } from 'react-native';
 import { RecipeForm, RecipeFormData } from './_form';
+import { uploadRecipePhoto } from '../../../lib/services/recipePhotos';
 import { useAuthStore } from '../../../lib/stores/authStore';
 import { supabase } from '../../../lib/supabase';
-
-async function uploadPhoto(uri: string, recipeId: number): Promise<string | null> {
-  try {
-    const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-    const path = `${recipeId}.${ext}`;
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const { error } = await supabase.storage
-      .from('recipe-photos')
-      .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
-    if (error) return null;
-    const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
-    return data.publicUrl;
-  } catch {
-    return null;
-  }
-}
 
 export default function NewRecipeScreen() {
   const router = useRouter();
@@ -87,9 +71,19 @@ export default function NewRecipeScreen() {
     }
 
     if (value.photoUri && inserted?.id) {
-      const publicUrl = await uploadPhoto(value.photoUri, inserted.id);
-      if (publicUrl) {
-        await supabase.from('recipes').update({ photo_url: publicUrl }).eq('id', inserted.id);
+      const publicUrl = await uploadRecipePhoto({
+        uri: value.photoUri,
+        recipeId: inserted.id,
+        userId,
+      });
+
+      const { error: photoUpdateError } = await supabase
+        .from('recipes')
+        .update({ photo_url: publicUrl })
+        .eq('id', inserted.id);
+
+      if (photoUpdateError) {
+        Alert.alert('Foto no actualizada', photoUpdateError.message);
       }
     }
 

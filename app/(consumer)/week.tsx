@@ -1,33 +1,78 @@
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
-  Easing,
+  Image,
   Modal,
   Platform,
   PlatformColor,
   Pressable,
   RefreshControl,
-  SafeAreaView,
-  SectionList,
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlanItemWithRecipe, useConsumerStore } from '../../lib/stores/consumerStore';
-import { lightTheme, useTheme } from '../../lib/theme';
+import { Swipeable } from 'react-native-gesture-handler';
+import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
+import { PlanItemWithRecipe, startOfWeekMonday, toISODate, useConsumerStore } from '../../lib/stores/consumerStore';
+import { useTheme } from '../../lib/theme';
 import { showToast } from '../../lib/utils/toast';
-import { DaySelector } from './menu/components/DaySelector';
-import { QuantitySelector } from './menu/components/QuantitySelector';
-
-const Swipeable = Platform.OS === 'web' ? null : (require('react-native-gesture-handler').Swipeable as any);
+import { DaySelector } from '../../lib/ui/consumer/menu/DaySelector';
+import { QuantitySelector } from '../../lib/ui/consumer/menu/QuantitySelector';
 
 function iosColor(name: string, fallback: string) {
   return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
 }
+
+type DayBlock = {
+  key: string;
+  label: string;
+  date: Date;
+  items: PlanItemWithRecipe[];
+};
+
+type IngredientLike = {
+  grams?: unknown;
+  caloriesPer100g?: unknown;
+  calories_per_100g?: unknown;
+  pricePer100g?: unknown;
+  price_per_100g?: unknown;
+};
+
+type DayRow = {
+  type: 'day';
+  key: string;
+  dayKey: string;
+  label: string;
+  dateLabel: string;
+  isFirst: boolean;
+};
+
+type EmptyRow = {
+  type: 'empty';
+  key: string;
+  dayKey: string;
+};
+
+type RecipeRow = {
+  type: 'recipe';
+  key: string;
+  dayKey: string;
+  planItemId: number;
+  recipeId: number;
+  recipeName: string;
+  emoji: string;
+  servings: number;
+  metrics: { calories: number | null; price: number | null } | null;
+  itemRef: PlanItemWithRecipe;
+};
+
+type TimelineRow = DayRow | EmptyRow | RecipeRow;
 
 const dayMap = [
   { key: 'mon', long: 'Lunes' },
@@ -39,18 +84,48 @@ const dayMap = [
   { key: 'sun', long: 'Domingo' },
 ];
 
-type DaySection = {
-  title: string;
-  date: Date;
-  data: PlanItemWithRecipe[];
-  dayKey: string;
-};
-
 const TOP_BAR_HEIGHT = 56;
 
+function toNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getRecipeMetrics(item: PlanItemWithRecipe) {
+  const ingredients = Array.isArray(item.recipe?.ingredients) ? (item.recipe?.ingredients as IngredientLike[]) : [];
+  if (!ingredients.length) return null;
+
+  const totals = ingredients.reduce(
+    (acc, ingredient) => {
+      const grams = toNumber(ingredient.grams);
+      const caloriesPer100g = toNumber(ingredient.caloriesPer100g ?? ingredient.calories_per_100g);
+      const pricePer100g = toNumber(ingredient.pricePer100g ?? ingredient.price_per_100g);
+      acc.calories += (grams / 100) * caloriesPer100g;
+      acc.price += (grams / 100) * pricePer100g;
+      return acc;
+    },
+    { calories: 0, price: 0 }
+  );
+
+  if (totals.calories <= 0 && totals.price <= 0) return null;
+
+  return {
+    calories: totals.calories > 0 ? Math.round(totals.calories) : null,
+    price: totals.price > 0 ? Math.round(totals.price / 10) * 10 : null,
+  };
+}
+
+function resolveDayForRecipeRow(data: TimelineRow[], rowKey: string): string | null {
+  let currentDay: string | null = null;
+  for (const row of data) {
+    if (row.type === 'day') currentDay = row.dayKey;
+    if (row.key === rowKey && row.type === 'recipe') return currentDay;
+  }
+  return null;
+}
+
 export default function ConsumerWeekScreen() {
-  const isDark = useColorScheme() === 'dark';
-  const { colors } = useTheme();
+  const { colors, spacing, radius, shadows, scheme, typography } = useTheme();
   const insets = useSafeAreaInsets();
 
   const selectedWeekStart = useConsumerStore((s) => s.selectedWeekStart);
@@ -67,39 +142,111 @@ export default function ConsumerWeekScreen() {
   const [editingDays, setEditingDays] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingEdit, setDeletingEdit] = useState(false);
-  const slide = useRef(new Animated.Value(0)).current;
+  const [timelineRows, setTimelineRows] = useState<TimelineRow[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [copyingPreviousWeek, setCopyingPreviousWeek] = useState(false);
+  const draggingRowKeyRef = useRef<string | null>(null);
 
-  const sections = useMemo<DaySection[]>(() => {
+  const timelineOpacity = useRef(new Animated.Value(1)).current;
+  const timelineTranslate = useRef(new Animated.Value(0)).current;
+
+  const dayBlocks = useMemo<DayBlock[]>(() => {
     return dayMap.map((day, index) => {
       const date = new Date(selectedWeekStart);
       date.setDate(selectedWeekStart.getDate() + index);
-      const data = planItems.filter((item) => item.days.includes(day.key));
       return {
-        title: `${day.long} ${date.getDate()}`,
+        key: day.key,
+        label: day.long,
         date,
-        data,
-        dayKey: day.key,
+        items: planItems.filter((item) => item.days.includes(day.key)),
       };
     });
   }, [planItems, selectedWeekStart]);
+
+  const computedRows = useMemo<TimelineRow[]>(() => {
+    const rows: TimelineRow[] = [];
+    dayBlocks.forEach((day, index) => {
+      rows.push({
+        type: 'day',
+        key: `day-${day.key}`,
+        dayKey: day.key,
+        label: day.label,
+        dateLabel: day.date.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit' }),
+        isFirst: index === 0,
+      });
+
+      if (!day.items.length) {
+        rows.push({
+          type: 'empty',
+          key: `empty-${day.key}`,
+          dayKey: day.key,
+        });
+        return;
+      }
+
+      day.items.forEach((item) => {
+        rows.push({
+          type: 'recipe',
+          key: `item-${day.key}-${item.id}`,
+          dayKey: day.key,
+          planItemId: item.id,
+          recipeId: item.recipe_id,
+          recipeName: item.recipe?.name || 'Receta',
+          emoji: item.recipe?.emoji || '🍽️',
+          servings: Math.max(1, item.servings || 1),
+          metrics: getRecipeMetrics(item),
+          itemRef: item,
+        });
+      });
+    });
+    return rows;
+  }, [dayBlocks]);
+
+  useEffect(() => {
+    if (!isDragging) {
+      setTimelineRows(computedRows);
+    }
+  }, [computedRows, isDragging]);
 
   const weekTitle = useMemo(() => {
     const start = new Date(selectedWeekStart);
     const end = new Date(selectedWeekStart);
     end.setDate(start.getDate() + 6);
-    const month = start.toLocaleDateString('es-UY', { month: 'short' });
-    return `Lun ${start.getDate()} – Dom ${end.getDate()} ${month}`;
+
+    const monthRaw = end.toLocaleDateString('es-UY', { month: 'short' }).replace('.', '').trim();
+    const month = monthRaw ? monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1) : '';
+    return `Lun ${start.getDate()} — Dom ${end.getDate()} ${month}`;
   }, [selectedWeekStart]);
 
   const onChangeWeek = async (direction: 'prev' | 'next') => {
-    Animated.timing(slide, {
-      toValue: direction === 'next' ? -18 : 18,
-      duration: 220,
-      easing: Easing.bezier(0.2, 0.9, 0.2, 1),
-      useNativeDriver: true,
-    }).start(async () => {
-      slide.setValue(0);
+    await Haptics.selectionAsync();
+
+    Animated.parallel([
+      Animated.timing(timelineOpacity, {
+        toValue: 0,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+      Animated.timing(timelineTranslate, {
+        toValue: direction === 'next' ? -14 : 14,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start(async () => {
       await navigateWeek(direction);
+      timelineTranslate.setValue(direction === 'next' ? 14 : -14);
+      Animated.parallel([
+        Animated.timing(timelineOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(timelineTranslate, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
     });
   };
 
@@ -109,9 +256,6 @@ export default function ConsumerWeekScreen() {
     await fetchPlanItems(currentPlan.id);
     setRefreshing(false);
   };
-
-  const mealsCount = planItems.reduce((acc, item) => acc + item.days.length, 0);
-  const distinctRecipes = planItems.length;
 
   const openEditor = async (item: PlanItemWithRecipe) => {
     setEditingItem(item);
@@ -175,17 +319,285 @@ export default function ConsumerWeekScreen() {
     }
   };
 
+  const onDeleteFromSwipe = async (row: RecipeRow) => {
+    try {
+      await removePlanItem(row.planItemId);
+      showToast({ type: 'success', message: 'Eliminado del plan' });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showToast({ type: 'error', message: 'No se pudo eliminar del plan' });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const copyPreviousWeek = async () => {
+    if (copyingPreviousWeek) return;
+    if (!currentPlan?.id) {
+      showToast({ type: 'error', message: 'No encontramos tu semana actual' });
+      return;
+    }
+
+    try {
+      setCopyingPreviousWeek(true);
+      await Haptics.selectionAsync();
+
+      const session = (await supabase.auth.getSession()).data.session;
+      const consumerId = session?.user?.id;
+      if (!consumerId) {
+        showToast({ type: 'error', message: 'Iniciá sesión nuevamente' });
+        return;
+      }
+
+      const previousWeek = startOfWeekMonday(new Date(selectedWeekStart));
+      previousWeek.setDate(previousWeek.getDate() - 7);
+      const previousWeekISO = toISODate(previousWeek);
+
+      const { data: previousPlan, error: previousPlanError } = await supabase
+        .from('weekly_plans')
+        .select('id')
+        .eq('consumer_id', consumerId)
+        .eq('week_start', previousWeekISO)
+        .maybeSingle();
+
+      if (previousPlanError || !previousPlan?.id) {
+        showToast({ type: 'warning', message: 'No hay semana anterior para copiar' });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+
+      const { data: previousItems, error: previousItemsError } = await supabase
+        .from('plan_items')
+        .select('recipe_id,servings,days')
+        .eq('plan_id', previousPlan.id);
+
+      if (previousItemsError) {
+        showToast({ type: 'error', message: 'No pudimos leer la semana anterior' });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      if (!previousItems?.length) {
+        showToast({ type: 'warning', message: 'La semana anterior no tiene comidas' });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+
+      const { error: clearError } = await supabase.from('plan_items').delete().eq('plan_id', currentPlan.id);
+      if (clearError) {
+        showToast({ type: 'error', message: 'No pudimos reemplazar tu semana actual' });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      for (const item of previousItems as Array<{ recipe_id: number; servings: number | null; days: string[] | null }>) {
+        const safeDays = Array.isArray(item.days) ? item.days : [];
+        if (!safeDays.length) continue;
+        await upsertPlanItem(item.recipe_id, Math.max(1, Number(item.servings) || 1), safeDays);
+      }
+
+      await fetchPlanItems(currentPlan.id);
+      showToast({ type: 'success', message: 'Semana copiada' });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showToast({ type: 'error', message: 'No se pudo copiar la semana anterior' });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setCopyingPreviousWeek(false);
+    }
+  };
+
+  const onRepeatPreviousWeek = () => {
+    if (copyingPreviousWeek) return;
+
+    if (planItems.length > 0) {
+      Alert.alert(
+        'Sobrescribir semana',
+        'Esto sobrescribirá tu semana actual. ¿Querés continuar?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sobrescribir', style: 'destructive', onPress: () => void copyPreviousWeek() },
+        ]
+      );
+      return;
+    }
+
+    void copyPreviousWeek();
+  };
+
+  const onDragEnd = async (data: TimelineRow[]) => {
+    setTimelineRows(data);
+    setIsDragging(false);
+
+    const draggingKey = draggingRowKeyRef.current;
+    draggingRowKeyRef.current = null;
+    if (!draggingKey) return;
+
+    const moved = data.find((row) => row.key === draggingKey && row.type === 'recipe');
+    if (!moved || moved.type !== 'recipe') return;
+
+    const targetDay = resolveDayForRecipeRow(data, moved.key);
+    if (!targetDay || targetDay === moved.dayKey) return;
+
+    const freshItem = planItems.find((item) => item.id === moved.planItemId);
+    if (!freshItem) return;
+
+    const nextDays = Array.from(
+      new Set([...(freshItem.days ?? []).filter((day) => day !== moved.dayKey), targetDay])
+    );
+
+    try {
+      await upsertPlanItem(freshItem.recipe_id, Math.max(1, freshItem.servings || 1), nextDays);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast({ type: 'success', message: `Movido a ${dayMap.find((d) => d.key === targetDay)?.long || 'otro día'}` });
+    } catch {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast({ type: 'error', message: 'No se pudo mover el pedido' });
+    }
+  };
+
+  const renderRow = ({ item, drag, isActive }: RenderItemParams<TimelineRow>) => {
+    if (item.type === 'day') {
+      return (
+        <View style={[styles.dayBlock, !item.isFirst && styles.dayBlockGap]}>
+          <View style={styles.dayHeader}>
+            <Text style={[styles.dayTitle, { color: iosColor('label', colors.label) }]}>{item.label}</Text>
+            <Text style={[styles.dayDate, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{item.dateLabel}</Text>
+          </View>
+          <View style={[styles.dayDivider, { backgroundColor: colors.separator }]} />
+        </View>
+      );
+    }
+
+    if (item.type === 'empty') {
+      return (
+        <View style={[styles.emptyCard, { backgroundColor: iosColor('tertiarySystemFill', colors.fill) }]}>
+          <Text style={[styles.emptyText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>Sin comidas planificadas</Text>
+        </View>
+      );
+    }
+
+    const card = (
+      <Pressable
+        onLongPress={() => void openEditor(item.itemRef)}
+        delayLongPress={220}
+        style={({ pressed }) => [
+          styles.recipeCard,
+          {
+            backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card),
+            shadowColor: colors.label,
+            borderRadius: radius.large,
+            borderColor: colors.separator,
+            borderWidth: StyleSheet.hairlineWidth,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.sm,
+            marginBottom: spacing.sm,
+            opacity: isActive ? 0.88 : 1,
+          },
+          shadows.card,
+          (pressed || isActive) && styles.recipeCardPressed,
+        ]}
+      >
+        <View style={styles.recipeTopRow}>
+          <View style={[styles.mediaThumb, { backgroundColor: iosColor('tertiarySystemFill', colors.fill), borderRadius: radius.medium }]}>
+            {item.itemRef.recipe?.photo_url ? (
+              <Image source={{ uri: item.itemRef.recipe.photo_url }} style={styles.mediaImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.rowEmoji}>{item.emoji}</Text>
+            )}
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.recipeName, { color: iosColor('label', colors.label) }]} numberOfLines={1}>
+              {item.recipeName}
+            </Text>
+            <View style={[styles.servingsBadge, { backgroundColor: iosColor('tertiarySystemFill', colors.fill) }]}>
+              <Text style={[styles.servingsBadgeText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+                {item.servings} porciones
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.actionsCol}>
+            <Pressable
+              hitSlop={10}
+              onPress={() => void onDeleteFromSwipe(item)}
+              style={[styles.iconButton, { backgroundColor: iosColor('tertiarySystemFill', colors.fill) }]}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+            </Pressable>
+
+            <Pressable
+              hitSlop={10}
+              onPressIn={async () => {
+                await Haptics.selectionAsync();
+                draggingRowKeyRef.current = item.key;
+                drag();
+              }}
+              style={[styles.iconButton, { backgroundColor: iosColor('tertiarySystemFill', colors.fill) }]}
+            >
+              <Ionicons name="reorder-three-outline" size={20} color={colors.secondaryLabel} />
+            </Pressable>
+          </View>
+        </View>
+
+        {item.metrics ? (
+          <View style={styles.metricsRow}>
+            {item.metrics.calories ? (
+              <Text style={[styles.metricText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+                {item.metrics.calories} kcal
+              </Text>
+            ) : null}
+            {item.metrics.price ? (
+              <Text style={[styles.metricText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
+                ${item.metrics.price}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </Pressable>
+    );
+
+    if (Platform.OS === 'web') return card;
+
+    return (
+      <Swipeable
+        overshootRight={false}
+        renderRightActions={() => (
+          <Pressable
+            onPress={() => void onDeleteFromSwipe(item)}
+            style={[
+              styles.swipeDelete,
+              {
+                backgroundColor: colors.danger,
+                borderRadius: radius.large,
+                marginBottom: spacing.sm,
+              },
+            ]}
+          >
+            <Text style={[styles.swipeDeleteText, { color: colors.card }]}>Eliminar</Text>
+          </Pressable>
+        )}
+      >
+        {card}
+      </Swipeable>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemGroupedBackground', colors.background) }]}>
-      <View style={[styles.topHeaderWrap, { paddingTop: insets.top }]}> 
-        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.topHeaderBlur}>
+      <View style={[styles.topHeaderWrap, { paddingTop: insets.top }]}>
+        <BlurView
+          intensity={82}
+          tint={scheme === 'dark' ? 'dark' : 'light'}
+          style={[styles.topHeaderBlur, { borderBottomColor: colors.separator, paddingHorizontal: spacing.xs }]}
+        >
           <Pressable style={styles.chevronButton} onPress={() => void onChangeWeek('prev')}>
             <Text style={[styles.chevron, { color: iosColor('systemBlue', colors.primary) }]}>‹</Text>
           </Pressable>
 
-          <Animated.Text style={[styles.weekTitle, { color: iosColor('label', colors.label), transform: [{ translateX: slide }] }]}>
+          <Text style={[styles.weekTitle, typography.subtitle, { color: iosColor('label', colors.label) }]} numberOfLines={1}>
             {weekTitle}
-          </Animated.Text>
+          </Text>
 
           <Pressable style={styles.chevronButton} onPress={() => void onChangeWeek('next')}>
             <Text style={[styles.chevron, { color: iosColor('systemBlue', colors.primary) }]}>›</Text>
@@ -193,94 +605,51 @@ export default function ConsumerWeekScreen() {
         </BlurView>
       </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingTop: insets.top + TOP_BAR_HEIGHT + 8, paddingBottom: 136 + insets.bottom }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={iosColor('systemBlue', colors.primary)} />}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.sectionHeader, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{section.title.toUpperCase()}</Text>
-        )}
-        renderItem={({ item, section }) => {
-          const recipeName = item.recipe?.name || 'Receta';
-          const emoji = item.recipe?.emoji || '🍽️';
-
-          const row = (
-            <Pressable
-              onPress={() => void openEditor(item)}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card),
-                },
-                pressed && styles.rowPressed,
-              ]}
-            >
-              <Text style={styles.rowEmoji}>{emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.rowTitle, { color: iosColor('label', colors.label) }]}>{recipeName}</Text>
-                <Text style={[styles.rowSubtitle, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>{item.servings} porciones</Text>
-              </View>
-              {!Swipeable ? (
-                <Pressable
-                  onPress={async () => {
-                    const nextDays = item.days.filter((d) => d !== section.dayKey);
-                    if (nextDays.length) {
-                      await upsertPlanItem(item.recipe_id, item.servings, nextDays);
-                    } else {
-                      await removePlanItem(item.id);
-                    }
-                    await Haptics.selectionAsync();
-                  }}
-                  style={[styles.webRemove, { backgroundColor: iosColor('systemRed', colors.danger) }]}
-                >
-                  <Text style={styles.webRemoveText}>Quitar</Text>
-                </Pressable>
-              ) : null}
-            </Pressable>
-          );
-
-          if (!Swipeable) return row;
-
-          return (
-            <Swipeable
-              overshootRight={false}
-              renderRightActions={() => (
-                <View style={[styles.swipeAction, { backgroundColor: iosColor('systemRed', colors.danger) }]}>
-                  <Text style={styles.swipeActionText}>Quitar</Text>
-                </View>
-              )}
-              onSwipeableOpen={async () => {
-                const nextDays = item.days.filter((d) => d !== section.dayKey);
-                if (nextDays.length) {
-                  await upsertPlanItem(item.recipe_id, item.servings, nextDays);
-                } else {
-                  await removePlanItem(item.id);
-                }
-                await Haptics.selectionAsync();
-              }}
-            >
-              {row}
-            </Swipeable>
-          );
-        }}
-        renderSectionFooter={({ section }) =>
-          section.data.length ? null : (
-            <View style={[styles.row, { backgroundColor: iosColor('secondarySystemGroupedBackground', colors.card) }]}>
-              <Text style={[styles.emptyRowText, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>Sin comidas planificadas</Text>
+      <Animated.View style={{ flex: 1, opacity: timelineOpacity, transform: [{ translateX: timelineTranslate }] }}>
+        <DraggableFlatList
+          data={timelineRows}
+          keyExtractor={(item) => item.key}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: insets.top + TOP_BAR_HEIGHT + spacing.xs,
+            paddingHorizontal: spacing.md,
+            paddingBottom: 132 + insets.bottom,
+          }}
+          ListHeaderComponent={
+            <View style={[styles.repeatActionWrap, { marginBottom: spacing.sm }]}>
+              <Pressable
+                onPress={onRepeatPreviousWeek}
+                disabled={copyingPreviousWeek}
+                style={({ pressed }) => [
+                  styles.repeatButton,
+                  {
+                    backgroundColor: iosColor('systemBlue', colors.primary),
+                    borderRadius: radius.medium + 2,
+                    opacity: pressed || copyingPreviousWeek ? 0.9 : 1,
+                  },
+                  shadows.button,
+                ]}
+              >
+                <Ionicons name="copy-outline" size={16} color={colors.card} />
+                <Text style={[styles.repeatButtonText, { color: colors.card }]}>
+                  {copyingPreviousWeek ? 'Copiando semana...' : 'Repetir semana anterior'}
+                </Text>
+              </Pressable>
             </View>
-          )
-        }
-      />
-
-      <View style={[styles.footerWrap, { bottom: 78 + insets.bottom / 2 }]}> 
-        <BlurView intensity={82} tint={isDark ? 'dark' : 'light'} style={styles.footerBlur}>
-          <Text style={[styles.footerText, { color: iosColor('label', colors.label) }]}>
-            {mealsCount} comidas · {distinctRecipes} recetas distintas
-          </Text>
-        </BlurView>
-      </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void onRefresh()}
+              tintColor={iosColor('systemBlue', colors.primary)}
+            />
+          }
+          onDragBegin={() => setIsDragging(true)}
+          onDragEnd={({ data }) => void onDragEnd(data)}
+          renderItem={renderRow}
+          containerStyle={{ flex: 1 }}
+        />
+      </Animated.View>
 
       <Modal
         visible={Boolean(editingItem)}
@@ -346,61 +715,141 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: iosColor('separator', lightTheme.colors.separator),
-    paddingHorizontal: 8,
   },
   chevronButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   chevron: { fontSize: 34, lineHeight: 34, fontWeight: '500' },
-  weekTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
+  weekTitle: {
+    flex: 1,
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
-  row: {
-    minHeight: 64,
+  repeatActionWrap: {},
+  repeatButton: {
+    minHeight: 48,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    shadowColor: lightTheme.colors.label,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 3,
+    justifyContent: 'center',
+    gap: 8,
   },
-  rowPressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.95,
+  repeatButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
   },
-  rowEmoji: { fontSize: 24, marginRight: 10 },
-  rowTitle: { fontSize: 16, fontWeight: '700' },
-  rowSubtitle: { fontSize: 13, marginTop: 2 },
-  emptyRowText: { fontSize: 15, fontStyle: 'italic' },
-  swipeAction: {
-    width: 92,
-    borderRadius: 18,
-    marginRight: 16,
-    marginBottom: 8,
+  dayBlock: {
+    marginBottom: 0,
+  },
+  dayBlockGap: {
+    marginTop: 20,
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  dayTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  dayDate: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dayDivider: {
+    marginTop: 8,
+    marginBottom: 10,
+    height: StyleSheet.hairlineWidth,
+  },
+  recipeCard: {
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  recipeCardPressed: {
+    opacity: 0.94,
+    transform: [{ scale: 0.992 }],
+  },
+  recipeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mediaThumb: {
+    width: 56,
+    height: 56,
+    overflow: 'hidden',
+    marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  swipeActionText: { color: lightTheme.colors.card, fontSize: 15, fontWeight: '700' },
-  webRemove: { minHeight: 30, borderRadius: 8, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
-  webRemoveText: { color: lightTheme.colors.card, fontSize: 12, fontWeight: '700' },
-  footerWrap: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
+  mediaImage: {
+    width: '100%',
+    height: '100%',
   },
-  footerBlur: { minHeight: 48, justifyContent: 'center', alignItems: 'center' },
-  footerText: { fontSize: 14, fontWeight: '700' },
+  rowEmoji: {
+    fontSize: 24,
+  },
+  recipeName: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  servingsBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  servingsBadgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+  actionsCol: {
+    marginLeft: 10,
+    gap: 6,
+  },
+  iconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricsRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metricText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  emptyCard: {
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  swipeDelete: {
+    width: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   sheetSafe: {
     flex: 1,
   },

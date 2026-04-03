@@ -1,12 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const USDA_API_KEY = process.env.USDA_API_KEY
 const LIMIT = Number(process.env.SEED_LIMIT || 200)
 const DRY_RUN = process.env.DRY_RUN === '1'
 
-if (!SUPABASE_URL) throw new Error('Missing SUPABASE_URL (or VITE_SUPABASE_URL)')
+if (!SUPABASE_URL) throw new Error('Missing SUPABASE_URL (or EXPO_PUBLIC_SUPABASE_URL)')
 if (!SUPABASE_SERVICE_ROLE_KEY && !DRY_RUN) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY')
 if (!USDA_API_KEY) throw new Error('Missing USDA_API_KEY')
 

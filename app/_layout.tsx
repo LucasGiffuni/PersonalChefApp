@@ -1,13 +1,26 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { registerForPushNotifications } from '../lib/services/pushNotifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/stores/authStore';
 import { useTheme } from '../lib/theme';
 import { ToastViewport } from '../lib/ui';
+import { showToast } from '../lib/utils/toast';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function RootLayout() {
   const router = useRouter();
@@ -81,6 +94,27 @@ export default function RootLayout() {
 
     return () => subscription.remove();
   }, [router]);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    void registerForPushNotifications(userId);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      const message =
+        notification.request.content.body ??
+        notification.request.content.title ??
+        'Nueva notificación';
+      showToast({ type: 'info', message });
+    });
+
+    return () => {
+      received.remove();
+    };
+  }, []);
 
   const inAuthGroup = segments[0] === '(auth)';
   const inChefGroup = segments[0] === '(chef)';

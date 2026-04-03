@@ -28,6 +28,8 @@ export default function ChefWeeklyProductionScreen() {
   const fetchWeekOrders = useChefDashboardStore((s) => s.fetchWeekOrders);
   const navigateWeek = useChefDashboardStore((s) => s.navigateWeek);
   const computeAggregate = useChefDashboardStore((s) => s.computeAggregate);
+  const startRealtimeSync = useChefDashboardStore((s) => s.startRealtimeSync);
+  const stopRealtimeSync = useChefDashboardStore((s) => s.stopRealtimeSync);
 
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +52,13 @@ export default function ChefWeeklyProductionScreen() {
       void run();
     }, [fetchConsumers, fetchWeekOrders, selectedWeekStart])
   );
+
+  React.useEffect(() => {
+    startRealtimeSync();
+    return () => {
+      stopRealtimeSync();
+    };
+  }, [startRealtimeSync, stopRealtimeSync]);
 
   const weekTitle = useMemo(() => {
     const start = new Date(selectedWeekStart);

@@ -18,9 +18,9 @@ import { useConsumerStore } from '../../../lib/stores/consumerStore';
 import { useTheme } from '../../../lib/theme';
 import { showToast } from '../../../lib/utils/toast';
 import { Card, PrimaryButton } from '../../../lib/ui';
-import { DaySelector } from './components/DaySelector';
-import { NutritionCard } from './components/NutritionCard';
-import { QuantitySelector } from './components/QuantitySelector';
+import { DaySelector } from '../../../lib/ui/consumer/menu/DaySelector';
+import { NutritionCard } from '../../../lib/ui/consumer/menu/NutritionCard';
+import { QuantitySelector } from '../../../lib/ui/consumer/menu/QuantitySelector';
 
 type IngredientLike = {
   name?: unknown;

@@ -1,12 +1,13 @@
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Alert,
+  KeyboardAvoidingView,
   Platform,
-  PlatformColor,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,103 +16,204 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
 
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
+type FieldName = 'email' | 'password' | null;
+
+function validateEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export default function LoginScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, radius, typography, shadows } = useTheme();
+  const heroIconSize = spacing.xl + spacing.xl + spacing.xs;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<FieldName>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const emailError = useMemo(() => {
+    if (!submitted) return null;
+    if (!email.trim()) return 'Ingresá tu email';
+    if (!validateEmail(email)) return 'Email inválido';
+    return null;
+  }, [email, submitted]);
+
+  const passwordError = useMemo(() => {
+    if (!submitted) return null;
+    if (!password) return 'Ingresá tu contraseña';
+    return null;
+  }, [password, submitted]);
 
   const onLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Campos incompletos', 'Ingresá email y contraseña.');
-      return;
-    }
+    setSubmitted(true);
+    setErrorMessage(null);
 
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (emailError || passwordError) return;
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
+
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+
     setLoading(false);
 
     if (error) {
-      Alert.alert('No se pudo iniciar sesión', error.message);
+      setErrorMessage(error.message);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  const inputCommon = {
+    backgroundColor: colors.fill,
+    borderRadius: radius.medium + 2,
+    minHeight: spacing.xl + spacing.lg,
+    paddingHorizontal: spacing.md,
+    color: colors.label,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+  } as const;
+
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', colors.background) }]}>
-      <View style={[styles.container, { paddingHorizontal: spacing.lg, paddingTop: spacing.lg }]}>
-        <Text style={[styles.title, { color: iosColor('label', colors.label) }]}>Iniciar sesión</Text>
-        <Text style={[styles.subtitle, { color: iosColor('secondaryLabel', colors.secondaryLabel) }]}>
-          Accedé a tu cuenta de chef
-        </Text>
-
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={[
-            styles.input,
-            {
-              backgroundColor: iosColor('secondarySystemBackground', colors.fill),
-              color: iosColor('label', colors.label),
-            },
-          ]}
-        />
-
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Contraseña"
-          placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
-          secureTextEntry
-          style={[
-            styles.input,
-            {
-              backgroundColor: iosColor('secondarySystemBackground', colors.fill),
-              color: iosColor('label', colors.label),
-            },
-          ]}
-        />
-
-        <Pressable
-          onPress={onLogin}
-          disabled={loading}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed || loading ? 0.85 : 1,
-            },
-          ]}
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: spacing.md,
+            paddingTop: spacing.lg,
+            paddingBottom: spacing.lg,
+          }}
         >
-          <Text style={[styles.primaryButtonText, { color: colors.card }]}>{loading ? 'Ingresando...' : 'Ingresar'}</Text>
-        </Pressable>
+          <View style={[styles.hero, { marginBottom: spacing.lg }]}>
+            <View
+              style={[
+                styles.heroIconWrap,
+                {
+                  backgroundColor: colors.fill,
+                  borderRadius: radius.large,
+                  marginBottom: spacing.md,
+                  width: heroIconSize,
+                  height: heroIconSize,
+                },
+              ]}
+            >
+              <Ionicons name="restaurant-outline" size={spacing.lg + spacing.sm} color={colors.primary} />
+            </View>
+            <Text style={[typography.title, styles.title, { color: colors.label, marginBottom: spacing.xs }]}>Iniciar sesión</Text>
+            <Text style={[typography.body, styles.subtitle, { color: colors.secondaryLabel }]}>Accedé a tu cuenta</Text>
+          </View>
 
-        <Link href="/register" asChild>
-          <Pressable style={styles.linkWrap}>
-            <Text style={[styles.link, { color: iosColor('systemBlue', colors.primary) }]}>Crear cuenta de chef</Text>
-          </Pressable>
-        </Link>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.card,
+                borderRadius: radius.large,
+                padding: spacing.lg,
+                marginTop: spacing.lg,
+                ...shadows.card,
+              },
+            ]}
+          >
+            <View style={{ gap: spacing.sm }}>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Email"
+                placeholderTextColor={colors.tertiaryLabel}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                autoComplete="email"
+                style={[
+                  inputCommon,
+                  focusedField === 'email' && { borderColor: colors.primary },
+                  emailError && { borderColor: colors.danger },
+                ]}
+              />
+              {emailError ? <Text style={[styles.errorText, { color: colors.danger }]}>{emailError}</Text> : null}
 
-        <Link href="/invite-register" asChild>
-          <Pressable style={styles.linkWrap}>
-            <Text style={[styles.link, { color: iosColor('systemBlue', colors.primary) }]}>Tengo código de invitación</Text>
-          </Pressable>
-        </Link>
-      </View>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Contraseña"
+                placeholderTextColor={colors.tertiaryLabel}
+                secureTextEntry
+                textContentType="password"
+                autoComplete="password"
+                style={[
+                  inputCommon,
+                  focusedField === 'password' && { borderColor: colors.primary },
+                  passwordError && { borderColor: colors.danger },
+                ]}
+              />
+              {passwordError ? <Text style={[styles.errorText, { color: colors.danger }]}>{passwordError}</Text> : null}
+            </View>
+
+            {errorMessage ? (
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    marginTop: spacing.md,
+                    backgroundColor: colors.fill,
+                    borderColor: colors.danger,
+                    borderRadius: radius.medium,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xs,
+                  },
+                ]}
+              >
+                <Text style={[styles.errorBannerText, { color: colors.danger }]}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={() => void onLogin()}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radius.medium + 4,
+                  minHeight: spacing.xl + spacing.lg,
+                  marginTop: spacing.md,
+                  opacity: loading ? 0.6 : pressed ? 0.92 : 1,
+                },
+                shadows.button,
+              ]}
+            >
+              <Text style={[styles.primaryButtonText, { color: colors.card }]}>{loading ? 'Ingresando...' : 'Ingresar'}</Text>
+            </Pressable>
+
+            <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+              <Link href="/register" asChild>
+                <Pressable style={styles.linkWrap}>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Crear cuenta</Text>
+                </Pressable>
+              </Link>
+
+              <Link href="/invite-register" asChild>
+                <Pressable style={styles.linkWrap}>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Tengo código de invitación</Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -120,44 +222,52 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  container: {
+  flex: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
   },
-  title: {
-    fontSize: 34,
-    fontWeight: '700',
+  hero: {
+    alignItems: 'center',
   },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-    marginBottom: 24,
-  },
-  input: {
-    height: 50,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    fontSize: 17,
-  },
-  primaryButton: {
-    height: 50,
-    borderRadius: 12,
+  heroIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+  },
+  title: {
+    textAlign: 'center',
+  },
+  subtitle: {
+    textAlign: 'center',
+  },
+  card: {},
+  errorText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  errorBanner: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryButtonText: {
     fontSize: 17,
-    fontWeight: '600',
+    lineHeight: 22,
+    fontWeight: '700',
   },
   linkWrap: {
-    marginTop: 18,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  link: {
+  linkText: {
     fontSize: 15,
+    lineHeight: 20,
     fontWeight: '600',
   },
 });

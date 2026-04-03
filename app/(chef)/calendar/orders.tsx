@@ -75,6 +75,8 @@ export default function ChefWeeklyOrdersScreen() {
   const fetchConsumers = useChefDashboardStore((s) => s.fetchConsumers);
   const fetchWeekOrders = useChefDashboardStore((s) => s.fetchWeekOrders);
   const navigateWeek = useChefDashboardStore((s) => s.navigateWeek);
+  const startRealtimeSync = useChefDashboardStore((s) => s.startRealtimeSync);
+  const stopRealtimeSync = useChefDashboardStore((s) => s.stopRealtimeSync);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -86,6 +88,13 @@ export default function ChefWeeklyOrdersScreen() {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   }, []);
+
+  useEffect(() => {
+    startRealtimeSync();
+    return () => {
+      stopRealtimeSync();
+    };
+  }, [startRealtimeSync, stopRealtimeSync]);
 
   useFocusEffect(
     useCallback(() => {

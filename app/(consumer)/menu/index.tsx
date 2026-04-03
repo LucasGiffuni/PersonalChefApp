@@ -5,17 +5,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   FlatList,
-  SafeAreaView,
+  Pressable,
   StyleSheet,
   Text,
   View,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useConsumerStore, type Recipe } from '../../../lib/stores/consumerStore';
 import { useTheme } from '../../../lib/theme';
 import { Input } from '../../../lib/ui';
-import { RecipeCard, RecipeCardSkeleton } from './components/RecipeCard';
+import { showToast } from '../../../lib/utils/toast';
+import { RecipeCard, RecipeCardSkeleton } from '../../../lib/ui/consumer/menu/RecipeCard';
 
 type MenuListItem =
   | { type: 'recipe'; item: Recipe }
@@ -34,6 +36,9 @@ export default function ConsumerMenuScreen() {
   const router = useRouter();
 
   const recipes = useConsumerStore((s) => s.recipes);
+  const favorites = useConsumerStore((s) => s.favorites);
+  const favoriteRecipeIds = useConsumerStore((s) => s.favoriteRecipeIds);
+  const toggleFavorite = useConsumerStore((s) => s.toggleFavorite);
   const chefId = useConsumerStore((s) => s.chefId);
   const chefName = useConsumerStore((s) => s.chefName);
 
@@ -81,6 +86,34 @@ export default function ConsumerMenuScreen() {
     [router]
   );
 
+  const onToggleFavorite = useCallback(
+    async (id: number) => {
+      if (favoritePendingId === id) return;
+      setFavoritePendingId(id);
+      try {
+        const result = await toggleFavorite(id);
+        if (result === 'added') {
+          showToast({ type: 'success', message: 'Agregado a favoritos' });
+        } else if (result === 'removed') {
+          showToast({ type: 'success', message: 'Eliminado de favoritos' });
+        } else {
+          showToast({
+            type: 'error',
+            message: 'No pudimos actualizar favoritos. Revisá la tabla favorites en Supabase.',
+          });
+        }
+      } catch {
+        showToast({
+          type: 'error',
+          message: 'No pudimos actualizar favoritos',
+        });
+      } finally {
+        setFavoritePendingId(null);
+      }
+    },
+    [favoritePendingId, toggleFavorite]
+  );
+
   const compactHeaderOpacity = scrollY.interpolate({
     inputRange: [40, 92],
     outputRange: [0, 1],
@@ -94,7 +127,7 @@ export default function ConsumerMenuScreen() {
   });
 
   return (
-    <SafeAreaView
+    <View
       style={[
         styles.safe,
         { backgroundColor: colors.background },
@@ -114,7 +147,12 @@ export default function ConsumerMenuScreen() {
             return <RecipeCardSkeleton />;
           }
 
-          return <RecipeCard recipe={item.item} onPress={onPressRecipe} />;
+          return (
+            <RecipeCard
+              recipe={item.item}
+              onPress={onPressRecipe}
+            />
+          );
         }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
           useNativeDriver: false,
@@ -148,6 +186,44 @@ export default function ConsumerMenuScreen() {
               icon={<Ionicons name="search" size={18} color={colors.secondaryLabel} />}
               containerStyle={[styles.searchWrap, shadows.card, { backgroundColor: colors.card, borderRadius: radius.medium + 6 }]}
             />
+
+            <View style={styles.favoritesSection}>
+              <View style={styles.favoritesHeader}>
+                <Text style={[styles.favoritesTitle, { color: colors.label }]}>Favoritos</Text>
+                <Text style={[styles.favoritesCount, { color: colors.secondaryLabel }]}>
+                  {favorites.length} guardados
+                </Text>
+              </View>
+
+              {favorites.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoritesRow}>
+                  {favorites.map((favorite) => (
+                    <Pressable
+                      key={favorite.id}
+                      onPress={() => onPressRecipe(favorite.id)}
+                      style={({ pressed }) => [
+                        styles.favoriteChip,
+                        shadows.card,
+                        { backgroundColor: colors.card, borderColor: colors.separator },
+                        pressed && styles.favoriteChipPressed,
+                      ]}
+                    >
+                      <Text style={styles.favoriteEmoji}>{favorite.emoji || '🍽️'}</Text>
+                      <Text style={[styles.favoriteName, { color: colors.label }]} numberOfLines={1}>
+                        {favorite.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={[styles.favoritesEmpty, { backgroundColor: colors.card, borderColor: colors.separator }]}>
+                  <Ionicons name="heart-outline" size={16} color={colors.secondaryLabel} />
+                  <Text style={[styles.favoritesEmptyText, { color: colors.secondaryLabel }]}>
+                    Tocá el corazon en un plato para guardarlo aca.
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -172,7 +248,7 @@ export default function ConsumerMenuScreen() {
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -227,6 +303,67 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  favoritesSection: {
+    marginTop: 16,
+  },
+  favoritesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  favoritesTitle: {
+    fontSize: 21,
+    lineHeight: 26,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  favoritesCount: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  favoritesRow: {
+    paddingRight: 4,
+    gap: 10,
+  },
+  favoriteChip: {
+    width: 132,
+    minHeight: 84,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'space-between',
+  },
+  favoriteChipPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  favoriteEmoji: {
+    fontSize: 22,
+  },
+  favoriteName: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  favoritesEmpty: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  favoritesEmptyText: {
+    marginLeft: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -254,3 +391,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+  const [favoritePendingId, setFavoritePendingId] = useState<number | null>(null);

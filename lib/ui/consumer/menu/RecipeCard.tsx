@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { memo, useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Recipe as ConsumerRecipe } from '../../../../lib/stores/consumerStore';
-import { useTheme } from '../../../../lib/theme';
+import type { Recipe as ConsumerRecipe } from '../../../stores/consumerStore';
+import { useTheme } from '../../../theme';
 
 type RecipeCardProps = {
   recipe: ConsumerRecipe;
@@ -59,39 +60,64 @@ function normalizeDifficulty(value: string | null) {
 }
 
 type IndicatorTone = {
-  text: string;
   bg: string;
 };
 
 function caloriesTone(calories: number): IndicatorTone {
   if (calories <= 500) {
-    return { text: '#1A7F37', bg: 'rgba(52,199,89,0.16)' };
+    return { bg: 'success' };
   }
   if (calories <= 800) {
-    return { text: '#9A6700', bg: 'rgba(255,214,10,0.20)' };
+    return { bg: 'warning' };
   }
-  return { text: '#C62828', bg: 'rgba(255,59,48,0.18)' };
+  return { bg: 'danger' };
 }
 
 function priceTone(price: number): IndicatorTone {
   if (price <= 250) {
-    return { text: '#1A7F37', bg: 'rgba(52,199,89,0.16)' };
+    return { bg: 'success' };
   }
   if (price <= 450) {
-    return { text: '#9A6700', bg: 'rgba(255,214,10,0.20)' };
+    return { bg: 'warning' };
   }
-  return { text: '#C62828', bg: 'rgba(255,59,48,0.18)' };
+  return { bg: 'danger' };
 }
 
-export const RecipeCard = memo(function RecipeCard({ recipe, onPress }: RecipeCardProps) {
-  const { colors, shadows } = useTheme();
+function withAlpha(color: string, alpha: number) {
+  if (!color.startsWith('#')) return color;
+  const value = color.slice(1);
+  const normalized = value.length === 3 ? value.split('').map((char) => char + char).join('') : value;
+  if (normalized.length !== 6) return color;
+
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+export const RecipeCard = memo(function RecipeCard({
+  recipe,
+  onPress,
+}: RecipeCardProps) {
+  const { colors, shadows, spacing } = useTheme();
   const metrics = useMemo(() => computeMetrics(recipe), [recipe]);
   const difficultyLabel = normalizeDifficulty(recipe.difficulty);
   const priceIndicator = priceTone(metrics.price);
   const calorieIndicator = caloriesTone(metrics.calories);
-  const mediaBg = colors.fill;
-  const fallbackImageBg = colors.fillStrong;
-  const pillBg = colors.background;
+  const mediaBg = colors.fillStrong;
+  const badgeTextColor = colors.onImage;
+  const priceBg =
+    priceIndicator.bg === 'success'
+      ? withAlpha(colors.success, 0.85)
+      : priceIndicator.bg === 'warning'
+        ? withAlpha(colors.warning, 0.85)
+        : withAlpha(colors.danger, 0.82);
+  const caloriesBg =
+    calorieIndicator.bg === 'success'
+      ? withAlpha(colors.success, 0.82)
+      : calorieIndicator.bg === 'warning'
+        ? withAlpha(colors.warning, 0.82)
+        : withAlpha(colors.danger, 0.82);
 
   return (
     <Pressable
@@ -100,9 +126,9 @@ export const RecipeCard = memo(function RecipeCard({ recipe, onPress }: RecipeCa
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: colors.card,
+          borderRadius: 20,
         },
-        shadows.card,
+        shadows.button,
         pressed && styles.cardPressed,
       ]}
     >
@@ -110,53 +136,56 @@ export const RecipeCard = memo(function RecipeCard({ recipe, onPress }: RecipeCa
         {recipe.photo_url ? (
           <Image source={{ uri: recipe.photo_url }} style={styles.image} resizeMode="cover" />
         ) : (
-          <View style={[styles.fallbackImage, { backgroundColor: fallbackImageBg }]}>
+          <View style={[styles.fallbackImage, { backgroundColor: mediaBg }]}>
             <Text style={styles.fallbackEmoji}>{recipe.emoji || '🍽️'}</Text>
           </View>
         )}
 
         <View pointerEvents="none" style={styles.overlay}>
-          <View style={styles.overlaySoft} />
-          <View style={styles.overlayMedium} />
-          <View style={styles.overlayStrong} />
-          <View style={styles.overlayContent}>
-            <Text style={[styles.title, { color: colors.card }]} numberOfLines={2}>
-              {recipe.name}
-            </Text>
-          </View>
-        </View>
-      </View>
+          <LinearGradient
+            colors={['transparent', withAlpha(colors.overlaySoft, 0.3), withAlpha(colors.overlayStrong, 0.82)]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.overlayGradient}
+          >
+            <View style={[styles.overlayContent, { padding: spacing.md }]}>
+              <Text style={[styles.title, { color: badgeTextColor }]} numberOfLines={2}>
+                {recipe.name}
+              </Text>
 
-        <View style={styles.infoRow}>
-        <View style={[styles.metricBadge, { backgroundColor: priceIndicator.bg }]}>
-          <Text style={[styles.price, { color: priceIndicator.text }]}>${metrics.price}</Text>
-          <Text style={[styles.estimatedTag, { color: priceIndicator.text }]}>{metrics.priceEstimated ? 'estimado' : 'precio'}</Text>
-        </View>
+              <View style={styles.badgesRow}>
+                <View style={[styles.metricBadge, { backgroundColor: priceBg }]}>
+                  <Text style={[styles.price, { color: badgeTextColor }]}>${metrics.price}</Text>
+                  <Text style={[styles.estimatedTag, { color: badgeTextColor }]}>
+                    {metrics.priceEstimated ? 'estimado' : 'precio'}
+                  </Text>
+                </View>
 
-        <View style={[styles.metricBadge, { backgroundColor: calorieIndicator.bg }]}>
-          <Ionicons name="flame-outline" size={14} color={calorieIndicator.text} />
-          <Text style={[styles.caloriesText, { color: calorieIndicator.text }]}>{metrics.calories} kcal</Text>
-          {metrics.caloriesEstimated ? <Text style={[styles.estimatedTag, { color: calorieIndicator.text }]}>aprox</Text> : null}
-        </View>
-      </View>
+                <View style={[styles.metricBadge, { backgroundColor: caloriesBg }]}>
+                  <Ionicons name="flame-outline" size={14} color={badgeTextColor} />
+                  <Text style={[styles.caloriesText, { color: badgeTextColor }]}>{metrics.calories} kcal</Text>
+                  {metrics.caloriesEstimated ? (
+                    <Text style={[styles.estimatedTag, { color: badgeTextColor }]}>aprox</Text>
+                  ) : null}
+                </View>
+              </View>
 
-      {(recipe.time || difficultyLabel) ? (
-        <View style={styles.metaRow}>
-          {recipe.time ? (
-          <View style={[styles.metaPill, { backgroundColor: pillBg }]}>
-              <Ionicons name="time-outline" size={12} color={colors.secondaryLabel} />
-              <Text style={[styles.metaText, { color: colors.secondaryLabel }]}>{recipe.time}</Text>
+              {(recipe.time || difficultyLabel) ? (
+                <View style={styles.metaRow}>
+                  {recipe.time ? (
+                    <Text style={[styles.metaText, { color: badgeTextColor }]}>{recipe.time}</Text>
+                  ) : null}
+
+                  {difficultyLabel ? (
+                    <Text style={[styles.metaText, { color: badgeTextColor }]}>· {difficultyLabel}</Text>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
-          ) : null}
-
-          {difficultyLabel ? (
-            <View style={[styles.metaPill, { backgroundColor: pillBg }]}>
-              <Ionicons name="speedometer-outline" size={12} color={colors.secondaryLabel} />
-              <Text style={[styles.metaText, { color: colors.secondaryLabel }]}>{difficultyLabel}</Text>
-            </View>
-          ) : null}
+          </LinearGradient>
         </View>
-      ) : null}
+
+      </View>
     </Pressable>
   );
 });
@@ -165,12 +194,11 @@ export const RecipeCardSkeleton = memo(function RecipeCardSkeleton() {
   const { colors } = useTheme();
   const mediaBg = colors.fill;
   return (
-    <View style={[styles.card, { backgroundColor: colors.card }]}>
+    <View style={[styles.card, { borderRadius: 20, backgroundColor: colors.card }]}>
       <View style={[styles.skeletonMedia, { backgroundColor: mediaBg }]} />
-      <View style={styles.skeletonBody}>
-        <View style={[styles.skeletonLine, styles.skeletonLineLg, { backgroundColor: colors.fill }]} />
-        <View style={[styles.skeletonLine, styles.skeletonLineMd, { backgroundColor: colors.fill }]} />
-        <View style={[styles.skeletonLine, styles.skeletonLineSm, { backgroundColor: colors.fill }]} />
+      <View style={styles.skeletonOverlay}>
+        <View style={[styles.skeletonLine, styles.skeletonLineLg, { backgroundColor: colors.fillStrong }]} />
+        <View style={[styles.skeletonLine, styles.skeletonLineMd, { backgroundColor: colors.fillStrong }]} />
       </View>
     </View>
   );
@@ -178,13 +206,13 @@ export const RecipeCardSkeleton = memo(function RecipeCardSkeleton() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 16,
   },
   cardPressed: {
-    opacity: 0.94,
-    transform: [{ scale: 0.987 }],
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
   },
   mediaWrap: {
     aspectRatio: 16 / 9,
@@ -205,54 +233,39 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
   },
-  overlaySoft: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  overlayMedium: {
+  overlayGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '68%',
-    backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  overlayStrong: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '40%',
-    backgroundColor: 'rgba(0,0,0,0.36)',
+    height: '50%',
+    justifyContent: 'flex-end',
   },
   overlayContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+    justifyContent: 'flex-end',
   },
   title: {
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 30,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
-  infoRow: {
+  badgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 14,
+    marginTop: 10,
     gap: 8,
   },
   metricBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    paddingVertical: 7,
+    borderRadius: 999,
+    paddingVertical: 6,
     paddingHorizontal: 10,
   },
   price: {
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: '800',
     letterSpacing: -0.6,
   },
@@ -273,46 +286,37 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  metaPill: {
-    flexDirection: 'row',
+    marginTop: 8,
     alignItems: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
   metaText: {
-    marginLeft: 4,
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 16,
+    fontWeight: '700',
   },
   skeletonMedia: {
     aspectRatio: 16 / 9,
   },
-  skeletonBody: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  skeletonOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 14,
+    gap: 8,
   },
   skeletonLine: {
     borderRadius: 8,
-    marginBottom: 10,
   },
   skeletonLineLg: {
     height: 22,
-    width: '72%',
+    width: '62%',
   },
   skeletonLineMd: {
-    height: 16,
-    width: '42%',
-  },
-  skeletonLineSm: {
     height: 14,
-    width: '55%',
-    marginBottom: 2,
+    width: '40%',
+  },
+  skeletonBody: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../../../lib/theme';
+import { useTheme } from '../../../theme';
 
 export const DAY_OPTIONS = [
   { key: 'mon', label: 'Lunes' },

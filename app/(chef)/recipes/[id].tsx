@@ -2,7 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { RecipeForm, RecipeFormData, RecipeFormIngredient } from './_form';
+import { uploadRecipePhoto } from '../../../lib/services/recipePhotos';
 import { supabase } from '../../../lib/supabase';
+import { useAuthStore } from '../../../lib/stores/authStore';
 import { useTheme } from '../../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,25 +26,6 @@ type RecipeEditData = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function uploadPhoto(uri: string, recipeId: number): Promise<string | null> {
-  try {
-    const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-    const path = `${recipeId}.${ext}`;
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const { error } = await supabase.storage
-      .from('recipe-photos')
-      .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
-    if (error) return null;
-    const { data } = supabase.storage.from('recipe-photos').getPublicUrl(path);
-    return data.publicUrl;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeDifficulty(value: string | null): RecipeFormData['difficulty'] {
   const v = String(value ?? '').toLowerCase();
@@ -90,6 +73,7 @@ function normalizeIngredients(input: any[] | null): RecipeFormIngredient[] {
 export default function EditRecipeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const userId = useAuthStore((s) => s.session?.user?.id);
   const { id } = useLocalSearchParams<{ id: string }>();
   const recipeId = Number(id);
 
@@ -152,11 +136,15 @@ export default function EditRecipeScreen() {
 
   const onSave = async (value: RecipeFormData) => {
     if (!recipe) throw new Error('No se encontró la receta para actualizar.');
+    if (!userId) throw new Error('Tu sesión expiró. Iniciá sesión nuevamente.');
 
     let finalPhotoUrl = value.photo_url || null;
     if (value.photoUri) {
-      const uploaded = await uploadPhoto(value.photoUri, recipe.id);
-      if (uploaded) finalPhotoUrl = uploaded;
+      finalPhotoUrl = await uploadRecipePhoto({
+        uri: value.photoUri,
+        recipeId: recipe.id,
+        userId,
+      });
     }
 
     const payload = {

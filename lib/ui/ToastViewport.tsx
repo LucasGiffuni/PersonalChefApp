@@ -64,8 +64,22 @@ export function ToastViewport() {
 
   if (!toast) return null;
 
-  const toneColor = toast.type === 'success' ? colors.success : colors.danger;
-  const iconName = toast.type === 'success' ? 'checkmark-circle' : 'alert-circle';
+  const toneColor =
+    toast.type === 'success'
+      ? colors.success
+      : toast.type === 'error'
+        ? colors.danger
+        : toast.type === 'warning'
+          ? colors.warning
+          : colors.primary;
+  const iconName =
+    toast.type === 'success'
+      ? 'checkmark-circle'
+      : toast.type === 'error'
+        ? 'alert-circle'
+        : toast.type === 'warning'
+          ? 'warning'
+          : 'information-circle';
 
   return (
     <View pointerEvents="none" style={[styles.wrap, { top: insets.top + spacing.sm }]}>

@@ -2,6 +2,29 @@ import { create } from 'zustand';
 import { supabase } from '../supabase';
 import { PlanItemWithRecipe, startOfWeekMonday, toISODate } from './consumerStore';
 import { useAuthStore } from './authStore';
+import { showToast } from '../utils/toast';
+
+let realtimeChannel: any = null;
+let realtimeSubscribers = 0;
+
+const DAY_LABELS: Record<string, string> = {
+  mon: 'Lunes',
+  tue: 'Martes',
+  wed: 'Miércoles',
+  thu: 'Jueves',
+  fri: 'Viernes',
+  sat: 'Sábado',
+  sun: 'Domingo',
+};
+
+function formatDays(days: unknown): string {
+  if (!Array.isArray(days) || days.length === 0) return 'su semana';
+  const labels = days.map((day) => DAY_LABELS[String(day)] ?? String(day)).filter(Boolean);
+  if (!labels.length) return 'su semana';
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} y ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+}
 
 export type ConsumerWithProfile = {
   consumerId: string;
@@ -28,6 +51,8 @@ type ChefDashboardStore = {
   fetchWeekOrders: (weekStart: Date) => Promise<void>;
   computeAggregate: (weekOrders: WeekOrderGroup[]) => RecipeAggregate[];
   navigateWeek: (direction: 'prev' | 'next') => Promise<void>;
+  startRealtimeSync: () => void;
+  stopRealtimeSync: () => void;
 };
 
 export const useChefDashboardStore = create<ChefDashboardStore>((set, get) => ({
@@ -177,5 +202,85 @@ export const useChefDashboardStore = create<ChefDashboardStore>((set, get) => ({
     next.setDate(base.getDate() + (direction === 'next' ? 7 : -7));
     set({ selectedWeekStart: next });
     await get().fetchWeekOrders(next);
+  },
+
+  startRealtimeSync: () => {
+    realtimeSubscribers += 1;
+    if (realtimeChannel) return;
+
+    realtimeChannel = supabase
+      .channel('plan_items_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'plan_items',
+        },
+        async (payload: any) => {
+          const chefId = useAuthStore.getState().session?.user?.id;
+          if (!chefId) return;
+
+          const row = payload?.new ?? payload?.old ?? null;
+          const planId = row?.plan_id ?? null;
+          if (!planId) return;
+
+          const { data: plan } = await supabase
+            .from('weekly_plans')
+            .select('id,chef_id,consumer_id')
+            .eq('id', planId)
+            .maybeSingle();
+
+          if (!plan || plan.chef_id !== chefId) return;
+
+          const [{ data: profile }, { data: recipe }] = await Promise.all([
+            supabase
+              .from('consumer_profiles')
+              .select('display_name')
+              .eq('user_id', plan.consumer_id)
+              .maybeSingle(),
+            supabase
+              .from('recipes')
+              .select('name,title')
+              .eq('id', row?.recipe_id ?? 0)
+              .maybeSingle(),
+          ]);
+
+          const consumerName = String(profile?.display_name ?? 'Un consumidor').trim() || 'Un consumidor';
+          const recipeName = String(recipe?.name ?? recipe?.title ?? 'una receta').trim() || 'una receta';
+          const servings = Math.max(1, Number(row?.servings ?? 1));
+          const daysLabel = formatDays(row?.days);
+
+          if (payload.eventType === 'INSERT') {
+            showToast({
+              type: 'success',
+              message: `${consumerName} agregó ${recipeName} (${servings} porciones) para ${daysLabel}`,
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            showToast({
+              type: 'info',
+              message: `${consumerName} modificó su pedido`,
+            });
+          } else if (payload.eventType === 'DELETE') {
+            showToast({
+              type: 'warning',
+              message: `${consumerName} eliminó su pedido`,
+            });
+          }
+
+          const activeWeek = get().selectedWeekStart;
+          await get().fetchConsumers();
+          await get().fetchWeekOrders(activeWeek);
+        }
+      )
+      .subscribe();
+  },
+
+  stopRealtimeSync: () => {
+    realtimeSubscribers = Math.max(0, realtimeSubscribers - 1);
+    if (realtimeSubscribers > 0) return;
+    if (!realtimeChannel) return;
+    void supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
   },
 }));

@@ -43,11 +43,15 @@ type ConsumerStore = {
   chefName: string | null;
   linkedAt: string | null;
   recipes: Recipe[];
+  favorites: Recipe[];
+  favoriteRecipeIds: number[];
   currentPlan: WeeklyPlan | null;
   planItems: PlanItemWithRecipe[];
   selectedWeekStart: Date;
   initialize: (consumerId: string) => Promise<void>;
   fetchChefRecipes: (chefId: string) => Promise<void>;
+  fetchFavorites: () => Promise<void>;
+  toggleFavorite: (recipeId: number) => Promise<'added' | 'removed' | 'error'>;
   fetchOrCreatePlan: (weekStart: Date) => Promise<void>;
   fetchPlanItems: (planId: number) => Promise<void>;
   upsertPlanItem: (recipeId: number, servings: number, days: string[]) => Promise<void>;
@@ -76,6 +80,8 @@ export const useConsumerStore = create<ConsumerStore>((set, get) => ({
   chefName: null,
   linkedAt: null,
   recipes: [],
+  favorites: [],
+  favoriteRecipeIds: [],
   currentPlan: null,
   planItems: [],
   selectedWeekStart: initialWeek,
@@ -86,6 +92,8 @@ export const useConsumerStore = create<ConsumerStore>((set, get) => ({
       chefName: null,
       linkedAt: null,
       recipes: [],
+      favorites: [],
+      favoriteRecipeIds: [],
       currentPlan: null,
       planItems: [],
       selectedWeekStart: startOfWeekMonday(new Date()),
@@ -105,7 +113,15 @@ export const useConsumerStore = create<ConsumerStore>((set, get) => ({
       .maybeSingle();
 
     if (linkError || !linkData?.chef_id) {
-      set({ chefId: null, linkedAt: null, recipes: [], currentPlan: null, planItems: [] });
+      set({
+        chefId: null,
+        linkedAt: null,
+        recipes: [],
+        favorites: [],
+        favoriteRecipeIds: [],
+        currentPlan: null,
+        planItems: [],
+      });
       return;
     }
 
@@ -114,6 +130,7 @@ export const useConsumerStore = create<ConsumerStore>((set, get) => ({
 
     set({ chefId, linkedAt });
     await get().fetchChefRecipes(chefId);
+    await get().fetchFavorites();
     await get().fetchOrCreatePlan(monday);
   },
 
@@ -130,7 +147,56 @@ export const useConsumerStore = create<ConsumerStore>((set, get) => ({
       return;
     }
 
-    set({ recipes: (data as Recipe[]) ?? [] });
+    const recipes = (data as Recipe[]) ?? [];
+    const favoriteIds = get().favoriteRecipeIds;
+    const favorites = recipes.filter((recipe) => favoriteIds.includes(recipe.id));
+    set({ recipes, favorites });
+  },
+
+  fetchFavorites: async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const userId = session?.user?.id;
+    if (!userId) {
+      set({ favorites: [], favoriteRecipeIds: [] });
+      return;
+    }
+
+    const { data, error } = await supabase.from('favorites').select('recipe_id').eq('user_id', userId);
+    if (error) {
+      set({ favorites: [], favoriteRecipeIds: [] });
+      return;
+    }
+
+    const favoriteRecipeIds = ((data ?? []) as Array<{ recipe_id: number }>).map((row) => row.recipe_id);
+    const recipes = get().recipes;
+    const favorites = recipes.filter((recipe) => favoriteRecipeIds.includes(recipe.id));
+    set({ favoriteRecipeIds, favorites });
+  },
+
+  toggleFavorite: async (recipeId: number) => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const userId = session?.user?.id;
+    if (!userId) return 'error';
+
+    const exists = get().favoriteRecipeIds.includes(recipeId);
+
+    if (exists) {
+      const { error } = await supabase.from('favorites').delete().eq('user_id', userId).eq('recipe_id', recipeId);
+      if (error) return 'error';
+
+      const favoriteRecipeIds = get().favoriteRecipeIds.filter((id) => id !== recipeId);
+      const favorites = get().recipes.filter((recipe) => favoriteRecipeIds.includes(recipe.id));
+      set({ favoriteRecipeIds, favorites });
+      return 'removed';
+    }
+
+    const { error } = await supabase.from('favorites').insert({ user_id: userId, recipe_id: recipeId });
+    if (error) return 'error';
+
+    const favoriteRecipeIds = Array.from(new Set([...get().favoriteRecipeIds, recipeId]));
+    const favorites = get().recipes.filter((recipe) => favoriteRecipeIds.includes(recipe.id));
+    set({ favoriteRecipeIds, favorites });
+    return 'added';
   },
 
   fetchOrCreatePlan: async (weekStart: Date) => {

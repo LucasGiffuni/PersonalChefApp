@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Recipe } from '../../../../lib/types';
-import { useTheme } from '../../../../lib/theme';
+import { Recipe } from '../../types';
+import { useTheme } from '../../theme';
 
 type RecipeCardChefProps = {
   recipe: Recipe;

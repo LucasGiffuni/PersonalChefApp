@@ -2,6 +2,7 @@ export type ColorTokens = {
   background: string;
   card: string;
   label: string;
+  onImage: string;
   secondaryLabel: string;
   tertiaryLabel: string;
   separator: string;
@@ -91,6 +92,7 @@ const lightColors: ColorTokens = {
   background: '#F8F9FB',
   card: '#FFFFFF',
   label: '#111827',
+  onImage: '#FFFFFF',
   secondaryLabel: '#6B7280',
   tertiaryLabel: '#9CA3AF',
   separator: 'rgba(107,114,128,0.28)',
@@ -113,6 +115,7 @@ const darkColors: ColorTokens = {
   background: '#1C1F26',
   card: '#262B34',
   label: '#E5E7EB',
+  onImage: '#FFFFFF',
   secondaryLabel: '#A1AAB7',
   tertiaryLabel: '#7E8795',
   separator: 'rgba(156,163,175,0.28)',
