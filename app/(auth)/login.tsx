@@ -31,6 +31,7 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<FieldName>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const emailError = useMemo(() => {
     if (!submitted) return null;
@@ -143,22 +144,32 @@ export default function LoginScreen() {
               />
               {emailError ? <Text style={[styles.errorText, { color: colors.danger }]}>{emailError}</Text> : null}
 
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                placeholder="Contraseña"
-                placeholderTextColor={colors.tertiaryLabel}
-                secureTextEntry
-                textContentType="password"
-                autoComplete="password"
-                style={[
-                  inputCommon,
-                  focusedField === 'password' && { borderColor: colors.primary },
-                  passwordError && { borderColor: colors.danger },
-                ]}
-              />
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="Contraseña"
+                  placeholderTextColor={colors.tertiaryLabel}
+                  secureTextEntry={!showPassword}
+                  textContentType="password"
+                  autoComplete="password"
+                  style={[
+                    inputCommon,
+                    styles.passwordInput,
+                    focusedField === 'password' && { borderColor: colors.primary },
+                    passwordError && { borderColor: colors.danger },
+                  ]}
+                />
+                <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.tertiaryLabel}
+                  />
+                </Pressable>
+              </View>
               {passwordError ? <Text style={[styles.errorText, { color: colors.danger }]}>{passwordError}</Text> : null}
             </View>
 
@@ -239,6 +250,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {},
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 32,
+  },
   errorText: {
     fontSize: 12,
     lineHeight: 16,

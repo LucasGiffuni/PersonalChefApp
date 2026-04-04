@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import * as secureStorage from '../../lib/utils/secureStorage';
 import React, { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -27,6 +28,7 @@ export default function RegisterChefScreen() {
   const { colors, spacing, radius, typography, shadows } = useTheme();
   const heroIconSize = spacing.xl + spacing.xl + spacing.xs;
   const fetchRole = useAuthStore((s) => s.fetchRole);
+  const router = useRouter();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -36,6 +38,7 @@ export default function RegisterChefScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<FieldName>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const nameError = useMemo(() => {
     if (!submitted) return null;
@@ -93,23 +96,21 @@ export default function RegisterChefScreen() {
       return;
     }
 
-    const userId = data.user?.id;
-    if (!userId) {
+    // Si no hay sesión, Supabase requiere confirmación de email
+    if (!data.session) {
+      await secureStorage.setItem('pendingRole', 'chef');
       setLoading(false);
-      setErrorMessage('Revisá tu email para confirmar la cuenta y completar el registro.');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace('/(auth)/verify-email');
       return;
     }
 
-    const { error: roleError } = await supabase.from('user_roles').insert({
-      user_id: userId,
-      role: 'chef',
-    });
-
+    // Sesión activa — registrar rol via RPC (security definer, bypassa RLS)
+    const { error: roleError } = await supabase.rpc('register_chef');
     setLoading(false);
 
     if (roleError) {
-      setErrorMessage(`Cuenta creada, pero no pudimos asignar rol chef: ${roleError.message}`);
+      setErrorMessage(`No pudimos completar el registro: ${roleError.message}`);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
@@ -207,22 +208,32 @@ export default function RegisterChefScreen() {
               />
               {emailError ? <Text style={[styles.errorText, { color: colors.danger }]}>{emailError}</Text> : null}
 
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                placeholder="Contraseña"
-                placeholderTextColor={colors.tertiaryLabel}
-                secureTextEntry
-                textContentType="newPassword"
-                autoComplete="new-password"
-                style={[
-                  inputCommon,
-                  focusedField === 'password' && { borderColor: colors.primary },
-                  passwordError && { borderColor: colors.danger },
-                ]}
-              />
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="Contraseña"
+                  placeholderTextColor={colors.tertiaryLabel}
+                  secureTextEntry={!showPassword}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  style={[
+                    inputCommon,
+                    styles.passwordInput,
+                    focusedField === 'password' && { borderColor: colors.primary },
+                    passwordError && { borderColor: colors.danger },
+                  ]}
+                />
+                <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.tertiaryLabel}
+                  />
+                </Pressable>
+              </View>
               {passwordError ? <Text style={[styles.errorText, { color: colors.danger }]}>{passwordError}</Text> : null}
 
               <TextInput
@@ -321,6 +332,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {},
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 32,
+  },
   errorText: {
     fontSize: 12,
     lineHeight: 16,

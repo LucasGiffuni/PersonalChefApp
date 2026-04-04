@@ -14,7 +14,8 @@
       "Bash(npm install:*)",
       "Bash(git push:*)",
       "Bash(/Users/lucasgiffuni/Documents/GitHub/chef-pwa/supabase-setup.sql:*)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(find lib/ui -type f -name *.ts*)"
     ]
   }
 }

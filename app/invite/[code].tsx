@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import * as secureStorage from '../../lib/utils/secureStorage';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, PlatformColor, View } from 'react-native';
 import { useAuthStore } from '../../lib/stores/authStore';
@@ -13,7 +13,7 @@ export default function InviteCodeRoute() {
       if (!code || session) return;
       const normalized = String(code).trim().toUpperCase();
       if (!normalized) return;
-      await SecureStore.setItemAsync('pendingInviteCode', normalized);
+      await secureStorage.setItem('pendingInviteCode', normalized);
     };
 
     void persistCode();

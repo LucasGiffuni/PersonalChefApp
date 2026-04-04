@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
-import * as SecureStore from 'expo-secure-store';
+import * as secureStorage from '../lib/utils/secureStorage';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -77,7 +77,7 @@ export default function RootLayout() {
       if (!inviteCode) return;
 
       if (!useAuthStore.getState().session) {
-        await SecureStore.setItemAsync('pendingInviteCode', inviteCode);
+        await secureStorage.setItem('pendingInviteCode', inviteCode);
         router.replace('/invite-register');
       }
     };
@@ -115,6 +115,43 @@ export default function RootLayout() {
       received.remove();
     };
   }, []);
+
+  // Completa el registro de usuarios que confirmaron email después del signup
+  useEffect(() => {
+    if (isLoading || !session || role) return;
+
+    const bootstrap = async () => {
+      const userId = session.user.id;
+      const pendingRole = await secureStorage.getItem('pendingRole');
+      const pendingInviteCode = await secureStorage.getItem('pendingInviteCode');
+      const pendingDisplayName = await secureStorage.getItem('pendingDisplayName');
+
+      if (pendingRole === 'chef') {
+        const { error } = await supabase.rpc('register_chef');
+        if (!error) {
+          await secureStorage.deleteItem('pendingRole');
+        }
+      } else if (pendingInviteCode) {
+        const { error } = await supabase.rpc('redeem_invite_code', {
+          p_code: pendingInviteCode,
+          p_consumer_id: userId,
+        });
+        if (!error) {
+          await secureStorage.deleteItem('pendingInviteCode');
+          if (pendingDisplayName) {
+            await supabase
+              .from('consumer_profiles')
+              .upsert({ user_id: userId, display_name: pendingDisplayName }, { onConflict: 'user_id' });
+            await secureStorage.deleteItem('pendingDisplayName');
+          }
+        }
+      }
+
+      void fetchRole();
+    };
+
+    void bootstrap();
+  }, [isLoading, session, role, fetchRole]);
 
   const inAuthGroup = segments[0] === '(auth)';
   const inChefGroup = segments[0] === '(chef)';

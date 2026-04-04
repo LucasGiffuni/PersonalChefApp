@@ -1,139 +1,127 @@
 import * as Haptics from 'expo-haptics';
-import { Link } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { Link, useRouter } from 'expo-router';
+import * as secureStorage from '../../lib/utils/secureStorage';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  PlatformColor,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
-  useColorScheme,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/stores/authStore';
 import { useInviteStore } from '../../lib/stores/inviteStore';
-import { lightTheme, useTheme } from '../../lib/theme';
+import { useTheme } from '../../lib/theme';
 
-function iosColor(name: string, fallback: string) {
-  return Platform.OS === 'ios' ? PlatformColor(name) : fallback;
-}
+type FieldName = 'name' | 'email' | 'password' | 'code' | null;
+type CodeStatus = 'idle' | 'validating' | 'valid' | 'invalid';
 
-type FieldRowProps = {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  secureTextEntry?: boolean;
-  autoCapitalize?: 'none' | 'words' | 'sentences' | 'characters';
-  keyboardType?: 'default' | 'email-address';
-  editable?: boolean;
-  isLast?: boolean;
-};
-
-function FieldRow({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  secureTextEntry,
-  autoCapitalize = 'none',
-  keyboardType = 'default',
-  editable = true,
-  isLast = false,
-}: FieldRowProps) {
-  const isDark = useColorScheme() === 'dark';
-  const { colors } = useTheme();
-
-  return (
-    <View
-      style={[
-        styles.row,
-        {
-          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: iosColor('separator', colors.separator),
-        },
-      ]}
-    >
-      <Text style={[styles.rowLabel, { color: iosColor('label', colors.label) }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={iosColor('tertiaryLabel', colors.tertiaryLabel)}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize}
-        keyboardType={keyboardType}
-        editable={editable}
-        style={[styles.rowInput, { color: iosColor('label', colors.label) }]}
-      />
-    </View>
-  );
+function validateEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export default function InviteRegisterScreen() {
-  const isDark = useColorScheme() === 'dark';
-  const { colors } = useTheme();
+  const { colors, spacing, radius, typography, shadows } = useTheme();
+  const heroIconSize = spacing.xl + spacing.xl + spacing.xs;
+
   const validateCode = useInviteStore((s) => s.validateCode);
   const redeemCode = useInviteStore((s) => s.redeemCode);
   const fetchRole = useAuthStore((s) => s.fetchRole);
+  const router = useRouter();
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const [codePrefilled, setCodePrefilled] = useState(false);
+  const [codeStatus, setCodeStatus] = useState<CodeStatus>('idle');
 
-  const canSubmit = useMemo(() => {
-    return !!displayName.trim() && !!email.trim() && !!password && !!code.trim();
-  }, [displayName, email, password, code]);
+  const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<FieldName>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const nameError = useMemo(() => {
+    if (!submitted) return null;
+    if (!displayName.trim()) return 'Ingresá tu nombre';
+    if (displayName.trim().length < 2) return 'Nombre demasiado corto';
+    return null;
+  }, [displayName, submitted]);
+
+  const emailError = useMemo(() => {
+    if (!submitted) return null;
+    if (!email.trim()) return 'Ingresá tu email';
+    if (!validateEmail(email)) return 'Email inválido';
+    return null;
+  }, [email, submitted]);
+
+  const passwordError = useMemo(() => {
+    if (!submitted) return null;
+    if (!password) return 'Ingresá una contraseña';
+    if (password.length < 6) return 'Usá al menos 6 caracteres';
+    return null;
+  }, [password, submitted]);
+
+  const codeError = useMemo(() => {
+    if (!submitted) return null;
+    if (!code.trim()) return 'Ingresá el código de invitación';
+    return null;
+  }, [code, submitted]);
+
+  const canSubmit = !!displayName.trim() && !!email.trim() && !!password && !!code.trim();
 
   const runValidate = async (value: string) => {
     const clean = value.trim().toUpperCase();
     if (!clean) {
-      setCodeMessage(null);
+      setCodeStatus('idle');
       return;
     }
-
-    setValidating(true);
+    setCodeStatus('validating');
     const result = await validateCode(clean);
-    setValidating(false);
-
-    if (result.valid) {
-      const chefText = result.chefName ?? (result.chefId ? `ID ${result.chefId.slice(0, 8)}` : 'Chef asignado');
-      setCodeMessage(`Código válido · Chef: ${chefText}`);
-    } else {
-      setCodeMessage('Código inválido o expirado');
-    }
+    setCodeStatus(result.valid ? 'valid' : 'invalid');
   };
 
   useEffect(() => {
     const loadPendingCode = async () => {
-      const pending = await SecureStore.getItemAsync('pendingInviteCode');
+      const pending = await secureStorage.getItem('pendingInviteCode');
       if (!pending) return;
-
       const normalized = pending.toUpperCase();
       setCode(normalized);
       setCodePrefilled(true);
       await runValidate(normalized);
     };
-
     void loadPendingCode();
   }, []);
 
-  const onCreateConsumer = async () => {
-    if (!canSubmit) {
-      Alert.alert('Campos incompletos', 'Completá nombre, email, contraseña y código.');
+  const inputCommon = {
+    backgroundColor: colors.fill,
+    borderRadius: radius.medium + 2,
+    minHeight: spacing.xl + spacing.lg,
+    paddingHorizontal: spacing.md,
+    color: colors.label,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    fontSize: 16,
+  } as const;
+
+  const onSubmit = async () => {
+    setSubmitted(true);
+    setErrorMessage(null);
+
+    if (nameError || emailError || passwordError || codeError) return;
+    if (!canSubmit) return;
+
+    if (codeStatus === 'invalid') {
+      setErrorMessage('El código ingresado es inválido o expirado.');
       return;
     }
 
@@ -144,221 +132,376 @@ export default function InviteRegisterScreen() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: {
-        data: {
-          display_name: displayName.trim(),
-        },
-      },
+      options: { data: { display_name: displayName.trim() } },
     });
 
     if (error) {
       setLoading(false);
-      Alert.alert('No se pudo crear la cuenta', error.message);
+      setErrorMessage(error.message);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     const userId = data.user?.id;
     if (!userId) {
       setLoading(false);
-      Alert.alert('Revisá tu email', 'Tu cuenta requiere confirmación para continuar.');
+      setErrorMessage('No se pudo crear la cuenta. Intentá de nuevo.');
       return;
     }
 
+    // Email confirmation required — guardar para completar después
+    if (!data.session) {
+      await secureStorage.setItem('pendingInviteCode', normalizedCode);
+      await secureStorage.setItem('pendingDisplayName', displayName.trim());
+      setLoading(false);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace('/(auth)/verify-email');
+      return;
+    }
+
+    // Sesión activa — redimir código (RPC crea user_roles + chef_consumers)
     try {
       await redeemCode(normalizedCode, userId);
-    } catch (error: any) {
+    } catch (err: any) {
       setLoading(false);
-      Alert.alert('No se pudo aplicar el código', error?.message ?? 'Error desconocido');
+      setErrorMessage(err?.message ?? 'No se pudo aplicar el código de invitación.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
-    const { error: profileError } = await supabase.from('consumer_profiles').upsert(
-      {
-        user_id: userId,
-        display_name: displayName.trim(),
-      },
+    await supabase.from('consumer_profiles').upsert(
+      { user_id: userId, display_name: displayName.trim() },
       { onConflict: 'user_id' }
     );
 
+    await secureStorage.deleteItem('pendingInviteCode');
     setLoading(false);
-
-    if (profileError) {
-      Alert.alert('Cuenta creada con aviso', profileError.message);
-      return;
-    }
-
-    await SecureStore.deleteItemAsync('pendingInviteCode');
     await fetchRole();
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Cuenta creada', 'Tu cuenta de consumidor ya está vinculada a tu chef.');
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: iosColor('systemBackground', colors.background) }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.safe}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.container}>
-            <Text style={[styles.title, { color: iosColor('label', colors.label) }]}>Registro por invitación</Text>
-            <Text style={[styles.subtitle, { color: iosColor('secondaryLabel', isDark ? '#A0A0A0' : '#6B6B6B') }]}>
-              Ingresá tus datos para crear cuenta de consumidor.
-            </Text>
-
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: spacing.md,
+            paddingTop: spacing.lg,
+            paddingBottom: spacing.lg,
+          }}
+        >
+          {/* Hero */}
+          <View style={[styles.hero, { marginBottom: spacing.lg }]}>
             <View
               style={[
-                styles.group,
+                styles.heroIconWrap,
                 {
-                  backgroundColor: iosColor('secondarySystemBackground', isDark ? '#1C1C1E' : '#F2F2F7'),
+                  backgroundColor: colors.fill,
+                  borderRadius: radius.large,
+                  marginBottom: spacing.md,
+                  width: heroIconSize,
+                  height: heroIconSize,
                 },
               ]}
             >
-              <FieldRow
-                label="Tu nombre"
+              <Ionicons name="ticket-outline" size={spacing.lg + spacing.sm} color={colors.primary} />
+            </View>
+            <Text style={[typography.title, styles.title, { color: colors.label, marginBottom: spacing.xs }]}>
+              Registro por invitación
+            </Text>
+            <Text style={[typography.body, styles.subtitle, { color: colors.secondaryLabel }]}>
+              Ingresá el código que te compartió tu chef
+            </Text>
+          </View>
+
+          {/* Form card */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.card,
+                borderRadius: radius.large,
+                padding: spacing.lg,
+                ...shadows.card,
+              },
+            ]}
+          >
+            <View style={{ gap: spacing.sm }}>
+              {/* Nombre */}
+              <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
-                placeholder="Nombre y apellido"
+                onFocus={() => setFocusedField('name')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Nombre completo"
+                placeholderTextColor={colors.tertiaryLabel}
                 autoCapitalize="words"
+                textContentType="name"
+                autoComplete="name"
+                style={[
+                  inputCommon,
+                  focusedField === 'name' && { borderColor: colors.primary },
+                  nameError && { borderColor: colors.danger },
+                ]}
               />
-              <FieldRow
-                label="Email"
+              {nameError ? <Text style={[styles.fieldError, { color: colors.danger }]}>{nameError}</Text> : null}
+
+              {/* Email */}
+              <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="tu@email.com"
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Email"
+                placeholderTextColor={colors.tertiaryLabel}
+                autoCapitalize="none"
                 keyboardType="email-address"
+                textContentType="emailAddress"
+                autoComplete="email"
+                style={[
+                  inputCommon,
+                  focusedField === 'email' && { borderColor: colors.primary },
+                  emailError && { borderColor: colors.danger },
+                ]}
               />
-              <FieldRow
-                label="Contraseña"
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Mínimo 6 caracteres"
-                secureTextEntry
-              />
-              <FieldRow
-                label="Código"
-                value={code}
-                onChangeText={(value) => setCode(value.toUpperCase())}
-                placeholder="ABC234XY"
-                autoCapitalize="characters"
-                editable={!loading && !codePrefilled}
-                isLast
-              />
+              {emailError ? <Text style={[styles.fieldError, { color: colors.danger }]}>{emailError}</Text> : null}
+
+              {/* Contraseña */}
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="Contraseña"
+                  placeholderTextColor={colors.tertiaryLabel}
+                  secureTextEntry={!showPassword}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  style={[
+                    inputCommon,
+                    styles.passwordInput,
+                    focusedField === 'password' && { borderColor: colors.primary },
+                    passwordError && { borderColor: colors.danger },
+                  ]}
+                />
+                <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.tertiaryLabel}
+                  />
+                </Pressable>
+              </View>
+              {passwordError ? <Text style={[styles.fieldError, { color: colors.danger }]}>{passwordError}</Text> : null}
+
+              {/* Código de invitación */}
+              <View style={styles.codeRow}>
+                <TextInput
+                  value={code}
+                  onChangeText={(v) => {
+                    setCode(v.toUpperCase());
+                    setCodeStatus('idle');
+                  }}
+                  onFocus={() => setFocusedField('code')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    if (code.trim()) void runValidate(code);
+                  }}
+                  placeholder="Código de invitación"
+                  placeholderTextColor={colors.tertiaryLabel}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!loading && !codePrefilled}
+                  style={[
+                    inputCommon,
+                    styles.codeInput,
+                    focusedField === 'code' && { borderColor: colors.primary },
+                    codeStatus === 'valid' && { borderColor: colors.success },
+                    codeStatus === 'invalid' && { borderColor: colors.danger },
+                    codeError && { borderColor: colors.danger },
+                    codePrefilled && { opacity: 0.7 },
+                  ]}
+                />
+                <Pressable
+                  onPress={() => void runValidate(code)}
+                  disabled={!code.trim() || codeStatus === 'validating' || loading || codePrefilled}
+                  style={[
+                    styles.verifyBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      borderRadius: radius.medium + 2,
+                      opacity: !code.trim() || codeStatus === 'validating' || loading || codePrefilled ? 0.4 : 1,
+                    },
+                  ]}
+                >
+                  {codeStatus === 'validating' ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <Text style={[styles.verifyBtnText, { color: colors.card }]}>Verificar</Text>
+                  )}
+                </Pressable>
+              </View>
+
+              {codeError ? (
+                <Text style={[styles.fieldError, { color: colors.danger }]}>{codeError}</Text>
+              ) : codeStatus === 'valid' ? (
+                <View style={styles.codeBadgeRow}>
+                  <Ionicons name="checkmark-circle" size={15} color={colors.success} />
+                  <Text style={[styles.codeBadgeText, { color: colors.success }]}>Código válido</Text>
+                </View>
+              ) : codeStatus === 'invalid' ? (
+                <View style={styles.codeBadgeRow}>
+                  <Ionicons name="close-circle" size={15} color={colors.danger} />
+                  <Text style={[styles.codeBadgeText, { color: colors.danger }]}>Código inválido o expirado</Text>
+                </View>
+              ) : null}
             </View>
 
-            <Pressable onPress={() => void runValidate(code)} disabled={validating || loading} style={styles.validateWrap}>
-              <Text style={[styles.validateLink, { color: iosColor('systemBlue', '#007AFF') }]}>
-                {validating ? 'Validando...' : 'Validar código'}
-              </Text>
-            </Pressable>
-
-            {codeMessage ? (
-              <Text
+            {/* Error banner */}
+            {errorMessage ? (
+              <View
                 style={[
-                  styles.codeMessage,
+                  styles.errorBanner,
                   {
-                    color: codeMessage.startsWith('Código válido')
-                      ? iosColor('systemGreen', '#34C759')
-                      : iosColor('systemRed', '#FF3B30'),
+                    marginTop: spacing.md,
+                    backgroundColor: colors.fill,
+                    borderColor: colors.danger,
+                    borderRadius: radius.medium,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xs,
                   },
                 ]}
               >
-                {codeMessage}
-              </Text>
+                <Text style={[styles.errorBannerText, { color: colors.danger }]}>{errorMessage}</Text>
+              </View>
             ) : null}
 
+            {/* Submit */}
             <Pressable
-              onPress={onCreateConsumer}
-              disabled={!canSubmit || loading}
+              onPress={() => void onSubmit()}
+              disabled={loading}
               style={({ pressed }) => [
                 styles.primaryButton,
                 {
-                  backgroundColor: '#007AFF',
-                  opacity: pressed || loading || !canSubmit ? 0.6 : 1,
+                  backgroundColor: colors.primary,
+                  borderRadius: radius.medium + 4,
+                  minHeight: spacing.xl + spacing.lg,
+                  marginTop: spacing.md,
+                  opacity: loading ? 0.6 : pressed ? 0.92 : 1,
                 },
+                shadows.button,
               ]}
             >
-              <Text style={styles.primaryButtonText}>{loading ? 'Creando...' : 'Crear cuenta'}</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.card }]}>
+                {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+              </Text>
             </Pressable>
 
-            <Link href="/login" asChild>
-              <Pressable style={styles.linkWrap}>
-                <Text style={[styles.link, { color: iosColor('systemBlue', '#007AFF') }]}>Ya tengo cuenta</Text>
-              </Pressable>
-            </Link>
+            {/* Links */}
+            <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+              <Link href="/login" asChild>
+                <Pressable style={styles.linkWrap}>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Ya tengo cuenta</Text>
+                </Pressable>
+              </Link>
+              <Link href="/register" asChild>
+                <Pressable style={styles.linkWrap}>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Registrarme como chef</Text>
+                </Pressable>
+              </Link>
+            </View>
           </View>
-        </TouchableWithoutFeedback>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
+  safe: { flex: 1 },
+  flex: { flex: 1 },
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
   },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+  passwordInput: {
+    paddingRight: 48,
   },
-  title: {
-    fontSize: 34,
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 32,
+  },
+  hero: { alignItems: 'center' },
+  heroIconWrap: { alignItems: 'center', justifyContent: 'center' },
+  title: { textAlign: 'center' },
+  subtitle: { textAlign: 'center' },
+  card: {},
+  fieldError: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  codeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  codeInput: {
+    flex: 1,
+    letterSpacing: 1.5,
     fontWeight: '700',
   },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-    marginBottom: 18,
-  },
-  group: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  row: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
+  verifyBtn: {
+    height: 56,
     paddingHorizontal: 14,
-  },
-  rowLabel: {
-    width: 110,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  rowInput: {
-    flex: 1,
-    height: 44,
-    fontSize: 16,
-    textAlign: 'right',
-  },
-  validateWrap: {
-    marginTop: 12,
-  },
-  validateLink: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  codeMessage: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  primaryButton: {
-    height: 50,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
   },
-  primaryButtonText: {
-    color: lightTheme.colors.card,
-    fontSize: 17,
+  verifyBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  codeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  codeBadgeText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  linkWrap: {
-    marginTop: 18,
-    alignItems: 'center',
+  errorBanner: {
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  link: {
+  errorBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  linkWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkText: {
     fontSize: 15,
+    lineHeight: 20,
     fontWeight: '600',
   },
 });

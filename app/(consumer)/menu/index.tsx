@@ -44,6 +44,7 @@ export default function ConsumerMenuScreen() {
 
   const [query, setQuery] = useState('');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [favoritePendingId, setFavoritePendingId] = useState<number | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -391,4 +392,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-  const [favoritePendingId, setFavoritePendingId] = useState<number | null>(null);
